@@ -715,21 +715,25 @@ def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", ch
         raise ValueError("No valid cookies found")
 
     host = "api2.bybit.com"
-    path = f"/v5/asset/deposit/query-address?coin={urllib.parse.quote(coin)}&chainType={urllib.parse.quote(chain)}"
+    post_body = json.dumps({"coin": coin, "chain_type": chain})
+    path = "/asset/api/common/deposit/query-deposit-address"
 
     connection = socks5_connect(proxy, host, 443)
     try:
         context = ssl.create_default_context()
         with context.wrap_socket(connection, server_hostname=host) as secure:
             request_line = (
-                f"GET {path} HTTP/1.1\r\n"
+                f"POST {path} HTTP/1.1\r\n"
                 f"Host: {host}\r\n"
                 f"Cookie: {cookie_header}\r\n"
+                f"Content-Type: application/json\r\n"
+                f"Content-Length: {len(post_body)}\r\n"
                 f"Accept: application/json\r\n"
                 f"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36\r\n"
                 f"Referer: https://www.bybit.com/\r\n"
                 f"Origin: https://www.bybit.com\r\n"
                 f"Connection: close\r\n\r\n"
+                f"{post_body}"
             )
             secure.sendall(request_line.encode("utf-8"))
             response = bytearray()
@@ -775,25 +779,27 @@ def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", ch
         except json.JSONDecodeError:
             raise RuntimeError(f"Bybit вернул невалидный ответ (HTTP {status_code}): {body_text[:200]}")
 
-        if data.get("retCode") != 0:
-            msg = data.get("retMsg", "Unknown error")
+        ret_code = data.get("retCode") or data.get("ret_code") or 0
+        if ret_code != 0 and str(ret_code) != "0":
+            msg = data.get("retMsg") or data.get("ret_msg") or "Unknown error"
             raise RuntimeError(f"Bybit: {msg}")
 
         result = data.get("result", {})
+        # Web API may nest under result.chains or return flat
         chains = result.get("chains") or []
         if isinstance(chains, list) and chains:
             addr_info = chains[0]
             return {
                 "coin": coin,
                 "chain": chain,
-                "address": addr_info.get("addressDeposit", ""),
-                "tag": addr_info.get("tagDeposit", ""),
+                "address": addr_info.get("addressDeposit") or addr_info.get("address_deposit") or "",
+                "tag": addr_info.get("tagDeposit") or addr_info.get("tag_deposit") or "",
             }
         return {
             "coin": coin,
             "chain": chain,
-            "address": result.get("addressDeposit", result.get("address", "")),
-            "tag": result.get("tagDeposit", result.get("tag", "")),
+            "address": result.get("addressDeposit") or result.get("address_deposit") or result.get("address") or "",
+            "tag": result.get("tagDeposit") or result.get("tag_deposit") or result.get("tag") or "",
         }
     finally:
         connection.close()
