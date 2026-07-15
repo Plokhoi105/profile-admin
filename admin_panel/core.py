@@ -427,7 +427,21 @@ class Database:
     def list_accounts(self) -> list[dict]:
         with self.connect() as connection:
             rows = connection.execute("SELECT * FROM accounts ORDER BY id").fetchall()
-        return [self.public_account(row) for row in rows]
+            unread = dict(connection.execute(
+                "SELECT account_id, COUNT(*) FROM emails WHERE is_read = 0 GROUP BY account_id"
+            ).fetchall())
+            # Latest extracted code per account
+            latest_codes = dict(connection.execute(
+                "SELECT account_id, extracted_code FROM emails WHERE extracted_code != '' "
+                "AND id IN (SELECT MAX(id) FROM emails WHERE extracted_code != '' GROUP BY account_id)"
+            ).fetchall())
+        result = []
+        for row in rows:
+            acc = self.public_account(row)
+            acc["unread_emails"] = unread.get(acc["id"], 0)
+            acc["last_email_code"] = latest_codes.get(acc["id"], "")
+            result.append(acc)
+        return result
 
     def account(self, account_id: int) -> dict | None:
         with self.connect() as connection:

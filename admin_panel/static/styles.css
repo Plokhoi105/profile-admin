@@ -286,7 +286,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
   box-shadow: 0 4px 24px rgba(0,0,0,0.2);
   scrollbar-gutter: stable;
 }
-table { width: 100%; min-width: 1256px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+table { width: 100%; min-width: 1346px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 th, td {
   min-height: 48px; padding: 10px 10px; border-bottom: 1px solid var(--line);
   text-align: left; vertical-align: middle; overflow: hidden;
@@ -308,7 +308,7 @@ tbody tr:hover {
 tbody tr:last-child td { border-bottom: 0; }
 th:first-child, td:first-child { width: 42px; text-align: center; }
 th:nth-child(2) { width: 175px; } th:nth-child(3) { width: 190px; } th:nth-child(4) { width: 90px; }
-th:nth-child(5) { width: 150px; } th:nth-child(6) { width: 70px; } th:nth-child(7) { width: 130px; } th:nth-child(8) { width: 265px; } th:nth-child(9) { width: 145px; }
+th:nth-child(5) { width: 150px; } th:nth-child(6) { width: 90px; } th:nth-child(7) { width: 60px; } th:nth-child(8) { width: 120px; } th:nth-child(9) { width: 250px; } th:nth-child(10) { width: 145px; }
 th:last-child, td:last-child { position: sticky; right: 0; }
 th:last-child { z-index: 7; background: var(--surface-2); box-shadow: -10px 0 18px rgba(0,0,0,0.15), -1px 0 0 var(--line); }
 td:last-child { z-index: 3; background: var(--surface); box-shadow: -10px 0 18px rgba(0,0,0,0.12), -1px 0 0 var(--line); }
@@ -348,6 +348,21 @@ tbody tr:hover td:last-child { background: rgba(18, 22, 28, 0.98); }
   transition: opacity 0.2s, color 0.2s;
 }
 .email-cell .emails-btn:hover { opacity: 1; color: var(--accent); }
+.unread-badge {
+  display: inline-block; min-width: 14px; height: 14px; padding: 0 4px;
+  margin-left: 1px; border-radius: 7px; vertical-align: top;
+  background: var(--accent); color: #061510;
+  font: 700 9px/14px "SF Mono", Consolas, monospace; text-align: center;
+}
+.email-code-cell {
+  font: 700 14px/1 "SF Mono", Consolas, monospace; color: var(--accent); letter-spacing: 1.5px;
+}
+.email-code-cell .copy-email-code {
+  display: inline !important; width: auto !important; min-height: 0 !important;
+  padding: 0 !important; background: none !important; border: none !important;
+  font: inherit; color: inherit; cursor: pointer;
+}
+.email-code-cell .copy-email-code:hover { color: var(--accent-light); }
 .inline-copy {
   display: block; width: 100%; min-height: 0; padding: 3px 0; overflow: hidden;
   border: 0; border-radius: var(--radius-sm); color: inherit; background: transparent;
@@ -789,17 +804,18 @@ textarea {
     display: grid; place-items: center; padding: 0;
   }
   td:nth-child(2) { padding-right: 50px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-  td:nth-child(n+3):nth-child(-n+8)::before {
+  td:nth-child(n+3):nth-child(-n+9)::before {
     display: block; margin-bottom: 4px; color: var(--muted);
     font-size: 9px; font-family: "SF Mono", Consolas, monospace; text-transform: uppercase; letter-spacing: 0.05em;
   }
   td:nth-child(3)::before { content: "Email"; }
   td:nth-child(4)::before { content: "Код"; }
   td:nth-child(5)::before { content: "Аутентификатор"; }
-  td:nth-child(6)::before { content: "ОС"; }
-  td:nth-child(7)::before { content: "Статус"; }
-  td:nth-child(8)::before { content: "Актуальный прокси"; }
-  td:nth-child(9)::before {
+  td:nth-child(6)::before { content: "Email код"; }
+  td:nth-child(7)::before { content: "ОС"; }
+  td:nth-child(8)::before { content: "Статус"; }
+  td:nth-child(9)::before { content: "Актуальный прокси"; }
+  td:nth-child(10)::before {
     content: "Действия"; display: block; margin-bottom: 6px;
     color: var(--muted); font-size: 9px; font-family: "SF Mono", Consolas, monospace; text-transform: uppercase;
   }

@@ -102,11 +102,12 @@ function render() {
     return `<tr data-id="${account.id}" title="${escapeHtml(account.error || "")}">
       <td><input class="row-select" type="checkbox" aria-label="Выбрать ${escapeHtml(actualName(account))}" ${state.selected.has(account.id) ? "checked" : ""}></td>
       <td><div class="profile-cell"><div><button class="profile-copy" type="button" title="Копировать email и код" aria-label="Копировать email и код профиля ${escapeHtml(actualName(account))}"><strong>${escapeHtml(actualName(account))}</strong></button></div><button class="edit-account icon-small" title="Редактировать" aria-label="Редактировать">✎</button></div></td>
-      <td class="email-cell"><button class="inline-copy copy-email" type="button" title="Копировать email" aria-label="Копировать email ${escapeHtml(account.email)}">${escapeHtml(account.email)}</button><button class="emails-btn" type="button" title="Входящие письма" aria-label="Входящие письма">✉</button></td>
+      <td class="email-cell"><button class="inline-copy copy-email" type="button" title="Копировать email" aria-label="Копировать email ${escapeHtml(account.email)}">${escapeHtml(account.email)}</button><button class="emails-btn" type="button" title="Входящие письма" aria-label="Входящие письма">✉${account.unread_emails ? `<span class="unread-badge">${account.unread_emails}</span>` : ""}</button></td>
       <td class="code-value${state.codesHidden ? " is-hidden" : ""}">${account.code ? `<button class="inline-copy copy-code" type="button" title="Копировать код" aria-label="Копировать код профиля ${escapeHtml(actualName(account))}">${escapeHtml(state.codesHidden ? "••••••" : account.code)}</button>` : "—"}</td>
       <td class="totp-cell" data-totp-id="${account.id}">${account.has_authenticator
         ? `<div class="totp-value"><strong>${escapeHtml(totp?.code || "------")}</strong><small>${totp ? `${totp.remaining}с` : ""}</small></div><div class="totp-actions"><button class="copy-totp" ${totp ? "" : "disabled"}>Копировать</button><button class="setup-authenticator">Изменить</button></div>`
         : '<button class="setup-authenticator">Добавить ключ</button>'}</td>
+      <td class="email-code-cell">${account.last_email_code ? `<button class="inline-copy copy-email-code" type="button" title="Копировать код из письма">${escapeHtml(account.last_email_code)}</button>` : "—"}</td>
       <td class="os-cell">${account.fingerprint_os === "mac" ? "macOS" : "Win"}</td>
       <td><span class="status status-${escapeHtml(account.status)}">${escapeHtml(statusLabel(account.status))}</span></td>
       <td class="proxy-endpoint" title="${hasProxy ? "Прокси назначен" : "Прокси не назначен"}">
@@ -209,6 +210,10 @@ accountsBody.addEventListener("click", async (event) => {
   if (event.target.closest(".copy-code")) {
     const account = state.accounts.find((item) => item.id === id);
     if (account?.code) return copyText(account.code, "Код скопирован");
+  }
+  if (event.target.closest(".copy-email-code")) {
+    const account = state.accounts.find((item) => item.id === id);
+    if (account?.last_email_code) return copyText(account.last_email_code, "Код из письма скопирован");
   }
   if (event.target.closest(".copy-proxy")) return copyProxy(id);
   if (event.target.closest(".ip-history-btn")) return openIpHistory(id);
