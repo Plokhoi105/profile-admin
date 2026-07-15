@@ -119,6 +119,8 @@ function render() {
           ${proxyActionButton({ className: "change-country", icon: "&#9678;", label: "Сменить страну прокси", disabled: !canRotate })}
           ${proxyActionButton({ className: "check-fraud", icon: checkingFraud ? "&#8230;" : "&#9672;", label: checkingFraud ? "Fraud score проверяется" : "Проверить fraud score", disabled: !account.vision_proxy_id || busy || checkingFraud, working: checkingFraud })}
           ${hasProxy ? proxyActionButton({ className: "ip-history-btn", icon: "&#9776;", label: "История IP и fraud score" }) : ""}
+          ${proxyActionButton({ className: "bybit-cookies-btn", icon: "&#127850;", label: account.has_bybit_cookies ? "Обновить Bybit cookies" : "Загрузить Bybit cookies" })}
+          ${account.has_bybit_cookies ? proxyActionButton({ className: "deposit-addr-btn", icon: "&#128179;", label: "Получить адрес депозита", disabled: !hasProxy }) : ""}
         </div>
       </td>
       <td class="actions-cell"><div class="row-icon-actions">
@@ -218,6 +220,8 @@ accountsBody.addEventListener("click", async (event) => {
   if (event.target.closest(".copy-proxy")) return copyProxy(id);
   if (event.target.closest(".ip-history-btn")) return openIpHistory(id);
   if (event.target.closest(".emails-btn")) return openEmails(id);
+  if (event.target.closest(".bybit-cookies-btn")) return openBybitCookies(id);
+  if (event.target.closest(".deposit-addr-btn")) return getDepositAddress(id);
   if (event.target.closest(".change-country")) {
     const account = state.accounts.find((item) => item.id === id); state.countryAccountId = id;
     $("#proxy-country").value = account?.country || ""; $("#country-dialog").showModal(); return;
@@ -424,6 +428,55 @@ async function markEmailRead(emailId, el) {
     await api(`/api/emails/${emailId}/read`, { method: "POST" });
     if (el) el.style.borderLeft = "";
   } catch { /* ignore */ }
+}
+
+function openBybitCookies(id) {
+  const account = state.accounts.find((a) => a.id === id);
+  if (!account) return;
+  state.bybitCookiesAccountId = id;
+  $("#bybit-cookies-title").textContent = `Bybit cookies · ${actualName(account)}`;
+  $("#bybit-cookies-input").value = "";
+  $("#bybit-cookies-dialog").showModal();
+}
+
+async function saveBybitCookies() {
+  const id = state.bybitCookiesAccountId;
+  if (!id) return;
+  const raw = $("#bybit-cookies-input").value.trim();
+  if (!raw) return;
+  try {
+    const cookies = JSON.parse(raw);
+    await api(`/api/accounts/${id}/bybit-cookies`, { method: "POST", body: JSON.stringify({ cookies }) });
+    toast("Cookies сохранены");
+    $("#bybit-cookies-dialog").close();
+    loadAccounts();
+  } catch (error) {
+    toast("Ошибка: " + error.message);
+  }
+}
+
+async function getDepositAddress(id) {
+  const account = state.accounts.find((a) => a.id === id);
+  if (!account) return;
+  if (!account.has_bybit_cookies) {
+    toast("Сначала загрузите cookies для этого аккаунта");
+    return openBybitCookies(id);
+  }
+  const coin = prompt("Монета (например USDT):", "USDT");
+  if (!coin) return;
+  const chain = prompt("Сеть (например TRC20, ERC20, SOL):", "TRC20");
+  if (!chain) return;
+  try {
+    toast("Запрос адреса...");
+    const data = await api(`/api/accounts/${id}/deposit-address`, { method: "POST", body: JSON.stringify({ coin, chain }) });
+    if (data.address) {
+      await copyText(data.address, `Адрес ${coin} (${chain}) скопирован`);
+    } else {
+      toast("Адрес не найден");
+    }
+  } catch (error) {
+    toast("Ошибка: " + error.message);
+  }
 }
 
 function openDeleteVision(id) {

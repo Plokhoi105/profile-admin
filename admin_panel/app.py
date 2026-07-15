@@ -284,6 +284,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_create_job(data)
             elif path.startswith("/api/emails/") and path.endswith("/read"):
                 self._handle_mark_email_read(path)
+            elif path.startswith("/api/accounts/") and path.endswith("/bybit-cookies"):
+                self._handle_bybit_cookies(path, data)
+            elif path.startswith("/api/accounts/") and path.endswith("/deposit-address"):
+                self._handle_deposit_address(path, data)
             else:
                 self.send_json({"error": "Not found"}, 404)
         except (ValueError, json.JSONDecodeError) as exc:
@@ -578,6 +582,54 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Invalid email id") from exc
         db.mark_email_read(email_id)
         self.send_json({"ok": True})
+
+    def _handle_bybit_cookies(self, path: str, data: dict) -> None:
+        db = get_db()
+        try:
+            account_id = int(path.split("/")[3])
+        except (IndexError, ValueError) as exc:
+            raise ValueError("Invalid account id") from exc
+        cookies = data.get("cookies", "")
+        if isinstance(cookies, list):
+            cookies = json.dumps(cookies, ensure_ascii=False)
+        if cookies:
+            # Validate JSON
+            json.loads(cookies)
+        result = db.set_bybit_cookies(account_id, cookies)
+        if result is None:
+            self.send_json({"error": "Not found"}, 404)
+        else:
+            self.send_json({"ok": True, "account": result})
+
+    def _handle_deposit_address(self, path: str, data: dict) -> None:
+        from admin_panel.integrations import bybit_deposit_address
+        db = get_db()
+        try:
+            account_id = int(path.split("/")[3])
+        except (IndexError, ValueError) as exc:
+            raise ValueError("Invalid account id") from exc
+        account = db.account(account_id)
+        if not account:
+            self.send_json({"error": "Not found"}, 404)
+            return
+        cookies_json = db.get_bybit_cookies(account_id)
+        if not cookies_json:
+            self.send_json({"error": "No Bybit cookies saved for this account"}, 400)
+            return
+        proxy_id = str(account.get("vision_proxy_id") or "")
+        if not proxy_id:
+            self.send_json({"error": "No proxy assigned to this account"}, 400)
+            return
+        creator = ProfileCreator(ROOT)
+        proxy = creator.get_vision_proxy(proxy_id)
+        if not proxy:
+            self.send_json({"error": "Proxy not found in Vision"}, 400)
+            return
+        proxy_data = creator._normalize_raw_proxy(proxy)
+        coin = str(data.get("coin", "USDT"))
+        chain = str(data.get("chain", "TRC20"))
+        result = bybit_deposit_address(cookies_json, proxy_data, coin, chain)
+        self.send_json(result)
 
     def _handle_create_job(self, data: dict) -> None:
         db = get_db()

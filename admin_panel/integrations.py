@@ -698,3 +698,87 @@ class ProfileCreator:
         if not profile_id:
             raise RuntimeError("Vision API response did not include a profile id")
         return str(profile_id)
+
+
+def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", chain: str = "TRC20") -> dict:
+    """Fetch Bybit deposit address using session cookies through SOCKS5 proxy."""
+    cookie_list = json.loads(cookies_json) if isinstance(cookies_json, str) else cookies_json
+    if not isinstance(cookie_list, list):
+        raise ValueError("Cookies must be a JSON array")
+
+    # Build cookie header string
+    cookie_header = "; ".join(
+        f"{c['name']}={c['value']}" for c in cookie_list
+        if isinstance(c, dict) and "name" in c and "value" in c
+    )
+    if not cookie_header:
+        raise ValueError("No valid cookies found")
+
+    host = "api2.bybit.com"
+    path = f"/v5/asset/deposit/query-address?coin={urllib.parse.quote(coin)}&chainType={urllib.parse.quote(chain)}"
+
+    connection = socks5_connect(proxy, host, 443)
+    try:
+        context = ssl.create_default_context()
+        with context.wrap_socket(connection, server_hostname=host) as secure:
+            request_line = (
+                f"GET {path} HTTP/1.1\r\n"
+                f"Host: {host}\r\n"
+                f"Cookie: {cookie_header}\r\n"
+                f"Accept: application/json\r\n"
+                f"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36\r\n"
+                f"Referer: https://www.bybit.com/\r\n"
+                f"Origin: https://www.bybit.com\r\n"
+                f"Connection: close\r\n\r\n"
+            )
+            secure.sendall(request_line.encode("utf-8"))
+            response = bytearray()
+            while len(response) <= 256_000:
+                chunk = secure.recv(4096)
+                if not chunk:
+                    break
+                response.extend(chunk)
+
+        headers, separator, body = bytes(response).partition(b"\r\n\r\n")
+        if not separator:
+            raise RuntimeError("Invalid HTTP response from Bybit")
+
+        # Handle chunked transfer encoding
+        header_text = headers.decode("utf-8", errors="replace").lower()
+        if "transfer-encoding: chunked" in header_text:
+            decoded = bytearray()
+            remaining = body
+            while remaining:
+                line_end = remaining.find(b"\r\n")
+                if line_end == -1:
+                    break
+                chunk_size = int(remaining[:line_end], 16)
+                if chunk_size == 0:
+                    break
+                decoded.extend(remaining[line_end + 2:line_end + 2 + chunk_size])
+                remaining = remaining[line_end + 2 + chunk_size + 2:]
+            body = bytes(decoded)
+
+        data = json.loads(body.decode("utf-8"))
+        if data.get("retCode") != 0:
+            msg = data.get("retMsg", "Unknown error")
+            raise RuntimeError(f"Bybit API error: {msg}")
+
+        result = data.get("result", {})
+        chains = result.get("chains") or []
+        if isinstance(chains, list) and chains:
+            addr_info = chains[0]
+            return {
+                "coin": coin,
+                "chain": chain,
+                "address": addr_info.get("addressDeposit", ""),
+                "tag": addr_info.get("tagDeposit", ""),
+            }
+        return {
+            "coin": coin,
+            "chain": chain,
+            "address": result.get("addressDeposit", result.get("address", "")),
+            "tag": result.get("tagDeposit", result.get("tag", "")),
+        }
+    finally:
+        connection.close()

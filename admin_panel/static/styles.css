@@ -703,6 +703,28 @@ textarea {
   border-color: rgba(124, 138, 150, 0.25);
   box-shadow: 0 2px 8px rgba(124, 138, 150, 0.1);
 }
+.proxy-actions .bybit-cookies-btn {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.12);
+  font-size: 12px;
+}
+.proxy-actions .bybit-cookies-btn:hover:not(:disabled) {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.25);
+}
+.proxy-actions .deposit-addr-btn {
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.06);
+  border-color: rgba(52, 211, 153, 0.12);
+  font-size: 12px;
+}
+.proxy-actions .deposit-addr-btn:hover:not(:disabled) {
+  color: #6ee7b7;
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.25);
+}
 
 /* Emails */
 .emails-list { max-height: 400px; overflow-y: auto; }

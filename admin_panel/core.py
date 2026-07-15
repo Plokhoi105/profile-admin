@@ -314,6 +314,8 @@ class Database:
                 connection.execute("ALTER TABLE accounts ADD COLUMN fraud_checked_at TEXT NOT NULL DEFAULT ''")
             if "auth_secret" not in columns:
                 connection.execute("ALTER TABLE accounts ADD COLUMN auth_secret TEXT NOT NULL DEFAULT ''")
+            if "bybit_cookies" not in columns:
+                connection.execute("ALTER TABLE accounts ADD COLUMN bybit_cookies TEXT NOT NULL DEFAULT ''")
             email_columns = {row["name"] for row in connection.execute("PRAGMA table_info(emails)")}
             if email_columns and "extracted_code" not in email_columns:
                 connection.execute("ALTER TABLE emails ADD COLUMN extracted_code TEXT NOT NULL DEFAULT ''")
@@ -452,6 +454,7 @@ class Database:
     def public_account(row: sqlite3.Row | dict) -> dict:
         account = dict(row)
         account["has_authenticator"] = bool(account.pop("auth_secret", ""))
+        account["has_bybit_cookies"] = bool(account.pop("bybit_cookies", ""))
         return account
 
     def set_authenticator(self, account_id: int, secret: str) -> dict | None:
@@ -465,6 +468,22 @@ class Database:
                 return None
             row = connection.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
         return self.public_account(row)
+
+    def set_bybit_cookies(self, account_id: int, cookies_json: str) -> dict | None:
+        with self.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE accounts SET bybit_cookies = ?, updated_at = ? WHERE id = ?",
+                (cookies_json, now_iso(), account_id),
+            )
+            if not cursor.rowcount:
+                return None
+            row = connection.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+        return self.public_account(row)
+
+    def get_bybit_cookies(self, account_id: int) -> str:
+        with self.connect() as connection:
+            row = connection.execute("SELECT bybit_cookies FROM accounts WHERE id = ?", (account_id,)).fetchone()
+        return row["bybit_cookies"] if row else ""
 
     def authenticator_codes(self, timestamp: float | None = None) -> list[dict]:
         now = time.time() if timestamp is None else timestamp
