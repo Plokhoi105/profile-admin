@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from admin_panel.core import Database, normalize_country, parse_import
+from admin_panel.core import Database, generate_code, normalize_country, now_iso, parse_import
 from admin_panel.integrations import ProfileCreator, ProxySelectionError, VisionApiError, fallback_country_catalog
 from admin_panel.jobs import run_job
 from admin_panel.security import basic_auth_matches
@@ -268,6 +268,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_authenticator(path, data)
             elif path == "/api/sync":
                 self._handle_sync(data)
+            elif path == "/api/pull-from-vision":
+                self._handle_pull_from_vision(data)
             elif path.startswith("/api/trash/") and path.endswith("/restore"):
                 self._handle_restore(path)
             elif path.startswith("/api/accounts/") and path.endswith("/delete-vision"):
@@ -359,6 +361,89 @@ class Handler(BaseHTTPRequestHandler):
                 failed += 1
                 logger.warning("Vision sync failed for account %d: %s", account["id"], exc)
         self.send_json({"synced": synced, "missing": missing, "failed": failed, "pushed": pushed})
+
+    def _handle_pull_from_vision(self, data: dict) -> None:
+        """Import profiles from Vision that don't exist in the panel yet."""
+        import re as _re
+        db = get_db()
+        creator = ProfileCreator(ROOT)
+        creator.validate_vision()
+        vision_profiles = creator.list_vision_profiles()
+        existing_emails = {a["email"].lower() for a in db.list_accounts()}
+        existing_profile_ids = {a["vision_profile_id"] for a in db.list_accounts() if a["vision_profile_id"]}
+        imported = 0
+        skipped = 0
+        errors_list: list[str] = []
+        for vp in vision_profiles:
+            profile_id = str(vp.get("id") or "")
+            if not profile_id or profile_id in existing_profile_ids:
+                skipped += 1
+                continue
+            notes = str(vp.get("profile_notes") or "")
+            vision_name = str(vp.get("profile_name") or "")
+            # Parse email:code from notes
+            email_part, _, code_part = notes.partition(":")
+            email_addr = email_part.strip().lower()
+            code = code_part.strip()
+            if not email_addr or "@" not in email_addr:
+                errors_list.append(f"{vision_name}: no email in notes")
+                continue
+            if email_addr in existing_emails:
+                # Link existing account to this Vision profile
+                accounts = db.list_accounts()
+                for acc in accounts:
+                    if acc["email"].lower() == email_addr and not acc["vision_profile_id"]:
+                        proxy = vp.get("proxy") if isinstance(vp.get("proxy"), dict) else None
+                        proxy_id = str(vp.get("proxy_id") or (proxy or {}).get("id") or "")
+                        proxy_endpoint = creator.proxy_endpoint(proxy) if proxy else ""
+                        db.mark_synced(
+                            acc["id"],
+                            exists=True,
+                            profile_id=profile_id,
+                            proxy_id=proxy_id,
+                            proxy_endpoint=proxy_endpoint,
+                        )
+                        imported += 1
+                        break
+                else:
+                    skipped += 1
+                continue
+            # Extract profile_name from vision_name (strip country suffix)
+            panel_name = _re.sub(r"\s+[A-Z]{2,}$", "", vision_name).strip() or vision_name
+            # Determine country from proxy password or vision name
+            country = ""
+            proxy = vp.get("proxy") if isinstance(vp.get("proxy"), dict) else None
+            if proxy:
+                pw = str(proxy.get("proxy_password") or "")
+                cm = _re.search(r"_country-([a-z]{2})(?:_|$)", pw, _re.IGNORECASE)
+                if cm:
+                    country = cm.group(1).lower()
+            if not country:
+                cm2 = _re.search(r"\b([A-Z]{2})$", vision_name)
+                if cm2:
+                    country = cm2.group(1).lower()
+            proxy_id = str(vp.get("proxy_id") or (proxy or {}).get("id") or "")
+            proxy_endpoint = creator.proxy_endpoint(proxy) if proxy else ""
+            if not code:
+                code = generate_code()
+            ts = now_iso()
+            try:
+                with db.connect() as conn:
+                    conn.execute(
+                        """INSERT INTO accounts (
+                            profile_name, email, code, country, fingerprint_os, status,
+                            vision_profile_id, vision_proxy_id, proxy_endpoint,
+                            created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, 'created', ?, ?, ?, ?, ?)""",
+                        (panel_name, email_addr, code, country, "win",
+                         profile_id, proxy_id, proxy_endpoint, ts, ts),
+                    )
+                existing_emails.add(email_addr)
+                existing_profile_ids.add(profile_id)
+                imported += 1
+            except Exception as exc:
+                errors_list.append(f"{vision_name}: {exc}")
+        self.send_json({"imported": imported, "skipped": skipped, "errors": errors_list})
 
     def _handle_restore(self, path: str) -> None:
         db = get_db()

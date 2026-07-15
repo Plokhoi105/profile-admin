@@ -417,6 +417,16 @@ class ProfileCreator:
     def profile_notes(account: dict) -> str:
         return str(account["email"]) + (f":{account['code']}" if account.get("code") else "")
 
+    def list_vision_profiles(self) -> list[dict]:
+        """Fetch all profiles from the Vision folder."""
+        response = request_json(
+            "GET", f"{self.vision_base}/folders/{self.folder_id}/profiles", self.vision_token
+        )
+        data = response.get("data")
+        if isinstance(data, list):
+            return [p for p in data if isinstance(p, dict)]
+        return []
+
     def get_vision_profile(self, profile_id: str) -> dict:
         response = request_json(
             "GET", f"{self.vision_base}/folders/{self.folder_id}/profiles/{profile_id}", self.vision_token
