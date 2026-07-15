@@ -430,6 +430,18 @@ async function markEmailRead(emailId, el) {
   } catch { /* ignore */ }
 }
 
+$("#close-bybit-cookies").addEventListener("click", () => $("#bybit-cookies-dialog").close());
+$("#cancel-bybit-cookies").addEventListener("click", () => $("#bybit-cookies-dialog").close());
+$("#bybit-cookies-file-btn").addEventListener("click", () => $("#bybit-cookies-file").click());
+$("#bybit-cookies-file").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { $("#bybit-cookies-input").value = reader.result; };
+  reader.readAsText(file);
+  e.target.value = "";
+});
+
 function openBybitCookies(id) {
   const account = state.accounts.find((a) => a.id === id);
   if (!account) return;

@@ -154,11 +154,15 @@
   </div></dialog>
 
   <dialog id="bybit-cookies-dialog"><div class="dialog-panel">
-    <div class="dialog-head"><h2 id="bybit-cookies-title">Bybit cookies</h2><button type="button" class="icon" onclick="this.closest('dialog').close()">✕</button></div>
-    <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Экспортируйте cookies с bybit.com из Vision (TXT) или через Cookie-Editor (JSON) и вставьте сюда:</p>
-    <textarea id="bybit-cookies-input" rows="10" placeholder="Вставьте cookies в формате JSON или Netscape TXT"></textarea>
+    <div class="dialog-head"><h2 id="bybit-cookies-title">Bybit cookies</h2><button type="button" class="icon" id="close-bybit-cookies">✕</button></div>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Экспортируйте cookies с bybit.com из Vision (TXT) или через Cookie-Editor (JSON):</p>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button type="button" class="quiet-action" id="bybit-cookies-file-btn" style="flex:1">Загрузить файл (.txt / .json)</button>
+      <input type="file" id="bybit-cookies-file" accept=".txt,.json" hidden>
+    </div>
+    <textarea id="bybit-cookies-input" rows="10" placeholder="Или вставьте cookies сюда"></textarea>
     <div class="dialog-actions">
-      <button type="button" onclick="$('#bybit-cookies-dialog').close()">Отмена</button>
+      <button type="button" id="cancel-bybit-cookies">Отмена</button>
       <button type="button" class="primary" onclick="saveBybitCookies()">Сохранить</button>
     </div>
   </div></dialog>
