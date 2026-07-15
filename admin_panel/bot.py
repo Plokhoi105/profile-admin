@@ -564,7 +564,10 @@ def main() -> None:
             raise
         except Exception as exc:
             print(f"Bot polling error: {exc.__class__.__name__}: {exc}")
-            time.sleep(2)
+            if "409" in str(exc) or "Conflict" in str(exc):
+                time.sleep(30)
+            else:
+                time.sleep(2)
 
 
 if __name__ == "__main__":
