@@ -291,6 +291,7 @@ class Database:
                     sender TEXT NOT NULL DEFAULT '',
                     subject TEXT NOT NULL DEFAULT '',
                     body_text TEXT NOT NULL DEFAULT '',
+                    extracted_code TEXT NOT NULL DEFAULT '',
                     received_at TEXT NOT NULL,
                     is_read INTEGER NOT NULL DEFAULT 0
                 );
@@ -313,6 +314,9 @@ class Database:
                 connection.execute("ALTER TABLE accounts ADD COLUMN fraud_checked_at TEXT NOT NULL DEFAULT ''")
             if "auth_secret" not in columns:
                 connection.execute("ALTER TABLE accounts ADD COLUMN auth_secret TEXT NOT NULL DEFAULT ''")
+            email_columns = {row["name"] for row in connection.execute("PRAGMA table_info(emails)")}
+            if email_columns and "extracted_code" not in email_columns:
+                connection.execute("ALTER TABLE emails ADD COLUMN extracted_code TEXT NOT NULL DEFAULT ''")
             if {"deleted_at", "deleted_status"}.issubset(columns):
                 legacy_rows = connection.execute(
                     "SELECT * FROM accounts WHERE deleted_at != ''"
@@ -976,22 +980,22 @@ class Database:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def store_email(self, account_id: int, message_id: str, sender: str, subject: str, body_text: str, received_at: str) -> int | None:
+    def store_email(self, account_id: int, message_id: str, sender: str, subject: str, body_text: str, extracted_code: str, received_at: str) -> int | None:
         with self.connect() as connection:
             if message_id:
                 existing = connection.execute("SELECT id FROM emails WHERE message_id = ?", (message_id,)).fetchone()
                 if existing:
                     return None
             cursor = connection.execute(
-                "INSERT INTO emails (account_id, message_id, sender, subject, body_text, received_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (account_id, message_id, sender, subject, body_text, received_at),
+                "INSERT INTO emails (account_id, message_id, sender, subject, body_text, extracted_code, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (account_id, message_id, sender, subject, body_text, extracted_code, received_at),
             )
             return cursor.lastrowid
 
     def account_emails(self, account_id: int, limit: int = 50) -> list[dict]:
         with self.connect() as connection:
             rows = connection.execute(
-                "SELECT id, sender, subject, body_text, received_at, is_read FROM emails WHERE account_id = ? ORDER BY id DESC LIMIT ?",
+                "SELECT id, sender, subject, body_text, extracted_code, received_at, is_read FROM emails WHERE account_id = ? ORDER BY id DESC LIMIT ?",
                 (account_id, limit),
             ).fetchall()
         return [dict(row) for row in rows]

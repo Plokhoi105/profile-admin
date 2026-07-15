@@ -75,6 +75,24 @@ def _strip_html(html: str) -> str:
     return text.strip()
 
 
+def extract_verification_code(subject: str, body: str) -> str:
+    """Try to extract a verification/OTP code from email subject or body."""
+    text = subject + "\n" + body
+    # Common patterns: "Your code is 123456", "Code: 123456", "OTP: 1234"
+    # Also: "123-456", standalone 4-8 digit codes
+    patterns = [
+        r'(?:code|код|pin|otp|пароль|password|verify|verification)[:\s]+(\d{4,8})',
+        r'(?:code|код|pin|otp)[:\s]+([A-Z0-9]{4,8})',
+        r'\b(\d{3}[-\s]?\d{3})\b',  # 123-456 or 123 456
+        r'(?:^|\s)(\d{4,8})(?:\s|$|\.)',  # standalone 4-8 digit number
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(1).replace(" ", "").replace("-", "")
+    return ""
+
+
 def extract_recipients(msg: Message) -> list[str]:
     """Extract all To/Delivered-To/X-Original-To addresses."""
     addresses: list[str] = []
@@ -144,12 +162,14 @@ class MailChecker:
                     for recipient in recipients:
                         account_id = account_map.get(recipient)
                         if account_id is not None:
+                            code = extract_verification_code(subject, body)
                             result = self.db.store_email(
                                 account_id=account_id,
                                 message_id=message_id,
                                 sender=sender,
                                 subject=subject,
                                 body_text=body,
+                                extracted_code=code,
                                 received_at=received_at,
                             )
                             if result is not None:

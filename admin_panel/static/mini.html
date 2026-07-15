@@ -1046,12 +1046,14 @@ function openEmails(accountId) {
       var date = new Date(e.received_at);
       var dateStr = isNaN(date.getTime()) ? e.received_at : date.toLocaleString('ru-RU');
       var unread = !e.is_read ? 'border-left:3px solid var(--accent);' : '';
+      var codeHtml = e.extracted_code ? '<div style="margin:6px 0;padding:6px 12px;background:rgba(0,212,170,0.15);border-radius:8px;font:600 16px monospace;color:var(--accent);text-align:center;cursor:pointer" onclick="event.stopPropagation();copyCode(\'' + escapeHtml(e.extracted_code) + '\')">' + escapeHtml(e.extracted_code) + ' 📋</div>' : '';
       return '<div style="padding:10px 12px;border-bottom:1px solid var(--border);' + unread + '" onclick="markRead(' + e.id + ',this)">' +
         '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
           '<span style="font-size:12px;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + escapeHtml(e.sender) + '</span>' +
           '<span style="font-size:10px;color:var(--text-dim);white-space:nowrap;margin-left:8px">' + escapeHtml(dateStr) + '</span>' +
         '</div>' +
         '<div style="font-size:13px;font-weight:600;margin-bottom:4px">' + escapeHtml(e.subject) + '</div>' +
+        codeHtml +
         '<div style="font-size:11px;color:var(--text-dim);max-height:60px;overflow:hidden;white-space:pre-wrap;word-break:break-word">' + escapeHtml(e.body_text).substring(0, 300) + '</div>' +
       '</div>';
     }).join('');
@@ -1059,6 +1061,12 @@ function openEmails(accountId) {
     var el = document.getElementById('emails-content');
     if (el) el.innerHTML = '<div class="empty-state">' + escapeHtml(e.error || 'Ошибка') + '</div>';
   });
+}
+
+function copyCode(code) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(code).then(function() { toast('Код скопирован: ' + code, 'success'); });
+  }
 }
 
 function markRead(emailId, el) {
