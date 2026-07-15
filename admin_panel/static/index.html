@@ -167,6 +167,26 @@
     </div>
   </div></dialog>
 
+  <dialog id="deposit-dialog"><div class="dialog-panel">
+    <div class="dialog-head"><h2 id="deposit-title">Депозит</h2><button type="button" class="icon" id="close-deposit">✕</button></div>
+    <div class="form-row">
+      <label style="flex:1">Монета<input id="deposit-coin" value="USDT" placeholder="USDT"></label>
+      <label style="flex:1">Сеть<input id="deposit-chain" value="TRC20" placeholder="TRC20"></label>
+    </div>
+    <div class="dialog-actions" style="margin-top:14px">
+      <button type="button" class="primary" id="deposit-fetch-btn">Получить адрес</button>
+    </div>
+    <div id="deposit-result" hidden style="margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-2)">
+      <div style="color:var(--muted);font-size:10px;margin-bottom:6px">АДРЕС ДЕПОЗИТА</div>
+      <div id="deposit-address" style="font:600 13px/1.4 'SF Mono',Consolas,monospace;color:var(--accent);word-break:break-all;cursor:pointer" onclick="copyText(this.textContent,'Адрес скопирован')"></div>
+      <div id="deposit-tag-row" hidden style="margin-top:10px">
+        <div style="color:var(--muted);font-size:10px;margin-bottom:4px">TAG / MEMO</div>
+        <div id="deposit-tag" style="font:600 13px/1.4 'SF Mono',Consolas,monospace;color:#f59e0b;cursor:pointer" onclick="copyText(this.textContent,'Tag скопирован')"></div>
+      </div>
+    </div>
+    <div id="deposit-error" class="message"></div>
+  </div></dialog>
+
   <div id="toast" role="status" aria-live="polite"></div>
   <datalist id="countries"></datalist>
   <script src="/app.js"></script>

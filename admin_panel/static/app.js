@@ -221,7 +221,7 @@ accountsBody.addEventListener("click", async (event) => {
   if (event.target.closest(".ip-history-btn")) return openIpHistory(id);
   if (event.target.closest(".emails-btn")) return openEmails(id);
   if (event.target.closest(".bybit-cookies-btn")) return openBybitCookies(id);
-  if (event.target.closest(".deposit-addr-btn")) return getDepositAddress(id);
+  if (event.target.closest(".deposit-addr-btn")) return openDepositDialog(id);
   if (event.target.closest(".change-country")) {
     const account = state.accounts.find((item) => item.id === id); state.countryAccountId = id;
     $("#proxy-country").value = account?.country || ""; $("#country-dialog").showModal(); return;
@@ -433,6 +433,8 @@ async function markEmailRead(emailId, el) {
 $("#close-bybit-cookies").addEventListener("click", () => $("#bybit-cookies-dialog").close());
 $("#cancel-bybit-cookies").addEventListener("click", () => $("#bybit-cookies-dialog").close());
 $("#save-bybit-cookies").addEventListener("click", () => saveBybitCookies());
+$("#close-deposit").addEventListener("click", () => $("#deposit-dialog").close());
+$("#deposit-fetch-btn").addEventListener("click", () => getDepositAddress());
 $("#bybit-cookies-file-btn").addEventListener("click", () => $("#bybit-cookies-file").click());
 $("#bybit-cookies-file").addEventListener("change", (e) => {
   const file = e.target.files[0];
@@ -495,27 +497,46 @@ async function saveBybitCookies() {
   }
 }
 
-async function getDepositAddress(id) {
+function openDepositDialog(id) {
   const account = state.accounts.find((a) => a.id === id);
   if (!account) return;
   if (!account.has_bybit_cookies) {
     toast("Сначала загрузите cookies для этого аккаунта");
     return openBybitCookies(id);
   }
-  const coin = prompt("Монета (например USDT):", "USDT");
-  if (!coin) return;
-  const chain = prompt("Сеть (например TRC20, ERC20, SOL):", "TRC20");
-  if (!chain) return;
+  state.depositAccountId = id;
+  $("#deposit-title").textContent = `Депозит · ${actualName(account)}`;
+  $("#deposit-result").hidden = true;
+  $("#deposit-error").textContent = "";
+  $("#deposit-coin").value = "USDT";
+  $("#deposit-chain").value = "TRC20";
+  $("#deposit-dialog").showModal();
+}
+
+async function getDepositAddress() {
+  const id = state.depositAccountId;
+  if (!id) return;
+  const coin = $("#deposit-coin").value.trim() || "USDT";
+  const chain = $("#deposit-chain").value.trim() || "TRC20";
+  $("#deposit-error").textContent = "";
+  $("#deposit-result").hidden = true;
+  $("#deposit-fetch-btn").disabled = true;
+  $("#deposit-fetch-btn").textContent = "Загрузка...";
   try {
-    toast("Запрос адреса...");
     const data = await api(`/api/accounts/${id}/deposit-address`, { method: "POST", body: JSON.stringify({ coin, chain }) });
     if (data.address) {
-      await copyText(data.address, `Адрес ${coin} (${chain}) скопирован`);
+      $("#deposit-address").textContent = data.address;
+      $("#deposit-tag").textContent = data.tag || "";
+      $("#deposit-tag-row").hidden = !data.tag;
+      $("#deposit-result").hidden = false;
     } else {
-      toast("Адрес не найден");
+      $("#deposit-error").textContent = "Адрес не найден";
     }
   } catch (error) {
-    toast("Ошибка: " + error.message);
+    $("#deposit-error").textContent = error.message;
+  } finally {
+    $("#deposit-fetch-btn").disabled = false;
+    $("#deposit-fetch-btn").textContent = "Получить адрес";
   }
 }
 
