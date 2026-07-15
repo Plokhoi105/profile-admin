@@ -353,7 +353,7 @@ tbody tr:hover td:last-child { background: rgba(18, 22, 28, 0.98); }
 .deposit-subrow + tr > td, tr:has(+ .deposit-subrow) > td { border-bottom: none; }
 .deposit-cell {
   display: flex !important; align-items: center; gap: 6px; padding-bottom: 8px !important;
-  white-space: nowrap; overflow: hidden;
+  white-space: nowrap; overflow: visible !important; text-overflow: clip !important;
 }
 .deposit-cell .deposit-chain {
   flex-shrink: 0; font: 600 9px/1 system-ui, sans-serif; text-transform: uppercase;
