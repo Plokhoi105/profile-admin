@@ -738,8 +738,8 @@ function deleteOne(id, btn) {
 
 function doDelete(id, btn) {
   btn.disabled = true;
-  api('POST', '/api/accounts/' + id + '/permanent-delete', {}).then(() => {
-    toast('Удалено', 'success');
+  api('DELETE', '/api/accounts/' + id, {delete_vision: false}).then(() => {
+    toast('Удалено в корзину', 'success');
     loadAccounts();
   }).catch(e => toast(e.error || 'Ошибка', 'error'))
     .finally(() => { btn.disabled = false; });
