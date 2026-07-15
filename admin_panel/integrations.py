@@ -741,7 +741,11 @@ def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", ch
 
         headers, separator, body = bytes(response).partition(b"\r\n\r\n")
         if not separator:
-            raise RuntimeError("Invalid HTTP response from Bybit")
+            raise RuntimeError("Bybit не вернул ответ — проверьте cookies")
+
+        # Extract HTTP status
+        first_line = headers.split(b"\r\n", 1)[0].decode("utf-8", errors="replace")
+        status_code = int(first_line.split(" ", 2)[1]) if " " in first_line else 0
 
         # Handle chunked transfer encoding
         header_text = headers.decode("utf-8", errors="replace").lower()
@@ -752,17 +756,28 @@ def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", ch
                 line_end = remaining.find(b"\r\n")
                 if line_end == -1:
                     break
-                chunk_size = int(remaining[:line_end], 16)
+                try:
+                    chunk_size = int(remaining[:line_end], 16)
+                except ValueError:
+                    break
                 if chunk_size == 0:
                     break
                 decoded.extend(remaining[line_end + 2:line_end + 2 + chunk_size])
                 remaining = remaining[line_end + 2 + chunk_size + 2:]
             body = bytes(decoded)
 
-        data = json.loads(body.decode("utf-8"))
+        body_text = body.decode("utf-8", errors="replace").strip()
+        if not body_text:
+            raise RuntimeError(f"Bybit вернул пустой ответ (HTTP {status_code}) — cookies могли истечь")
+
+        try:
+            data = json.loads(body_text)
+        except json.JSONDecodeError:
+            raise RuntimeError(f"Bybit вернул невалидный ответ (HTTP {status_code}): {body_text[:200]}")
+
         if data.get("retCode") != 0:
             msg = data.get("retMsg", "Unknown error")
-            raise RuntimeError(f"Bybit API error: {msg}")
+            raise RuntimeError(f"Bybit: {msg}")
 
         result = data.get("result", {})
         chains = result.get("chains") or []
