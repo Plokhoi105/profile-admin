@@ -1,0 +1,86 @@
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    init: true
+    env_file: .env.server
+    environment:
+      ADMIN_HOST: 0.0.0.0
+      ADMIN_PORT: 8765
+      ADMIN_DB_PATH: /data/profiles.sqlite3
+      ADMIN_BOOTSTRAP_NOTES: /data/bootstrap-notes.txt
+      ADMIN_BOOTSTRAP_PROXIES: /data/bootstrap-proxies.csv
+      ADMIN_INLINE_WORKER: 0
+      ADMIN_REQUIRE_AUTH: 1
+    ports:
+      - "8765:8765"
+    volumes:
+      - ./server-data:/data
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3)"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  worker:
+    build: .
+    restart: unless-stopped
+    init: true
+    command: ["python", "-m", "admin_panel.worker"]
+    env_file: .env.server
+    environment:
+      ADMIN_DB_PATH: /data/profiles.sqlite3
+    volumes:
+      - ./server-data:/data
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; os.getpid()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      web:
+        condition: service_healthy
+
+  bot:
+    build: .
+    restart: unless-stopped
+    init: true
+    command: ["python", "-m", "admin_panel.bot"]
+    env_file: .env.server
+    environment:
+      ADMIN_INTERNAL_URL: http://web:8765
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; os.getpid()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      web:
+        condition: service_healthy

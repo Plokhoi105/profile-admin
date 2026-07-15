@@ -1,0 +1,2 @@
+"""Local profile administration panel."""
+

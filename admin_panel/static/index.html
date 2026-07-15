@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Profile Admin</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">PA</span>
+      <div class="brand-copy"><span class="brand-overline">Vision workspace</span><h1>Profile Admin</h1></div>
+    </div>
+    <div class="workspace-state"><span></span><div><strong>Локальная панель</strong><small id="summary">0 аккаунтов</small></div></div>
+    <div class="topbar-actions">
+      <button id="refresh-profiles" class="quiet-action">Проверить</button>
+      <button id="sync-profiles" class="quiet-action">Синхронизировать все</button>
+      <button id="open-trash" class="quiet-action">Корзина <span id="trash-count">0</span></button>
+      <button id="open-import" class="primary">Импорт</button>
+    </div>
+  </header>
+
+  <section class="metrics" aria-label="Сводка">
+    <div class="metric-created"><span>Создано</span><strong id="metric-created">0</strong></div>
+    <div class="metric-pending"><span>Ждут синхронизации</span><strong id="metric-pending">0</strong></div>
+    <div class="metric-missing"><span>Не создано</span><strong id="metric-missing">0</strong></div>
+    <div class="metric-errors"><span>Ошибки</span><strong id="metric-errors">0</strong></div>
+  </section>
+
+  <main>
+    <section class="command-center" aria-label="Управление профилями">
+      <div class="filters" aria-label="Фильтры">
+        <div class="search-field"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Профиль, email или прокси"></div>
+        <select id="status-filter" aria-label="Фильтр по статусу">
+          <option value="">Все статусы</option>
+          <option value="created">Создан</option>
+          <option value="pending_sync">Ждет синхронизации</option>
+          <option value="not_created">Не создан</option>
+          <option value="error">Ошибка</option>
+        </select>
+        <button id="toggle-codes" class="quiet-action" type="button" aria-pressed="false">Скрыть коды</button>
+      </div>
+      <div class="toolbar" aria-label="Действия с выбранными аккаунтами">
+        <span id="selected-count">Выбрано: 0</span>
+        <label><span>Страна</span><input id="bulk-country" list="countries" placeholder="mz"></label>
+        <label><span>ОС</span>
+          <select id="bulk-os"><option value="">Без изменения</option><option value="win">Windows</option><option value="mac">macOS</option></select>
+        </label>
+        <div class="bulk-actions" aria-label="Массовые действия">
+          <button id="bulk-sync" class="bulk-icon" title="Синхронизировать выбранные" aria-label="Синхронизировать выбранные" disabled>↻</button>
+          <button id="create-profiles" class="bulk-icon action-create" title="Создать выбранные в Vision" aria-label="Создать выбранные в Vision" disabled>+</button>
+          <button id="bulk-fraud-check" class="bulk-icon action-fraud" title="Проверить fraud score у всех прокси" aria-label="Проверить fraud score у всех прокси" disabled>&#9672;</button>
+          <button id="bulk-rotate-bad" class="bulk-icon action-rotate-bad" title="Заменить прокси с fraud score ≥ 25" aria-label="Заменить прокси с fraud score 25 и выше" disabled>&#8635;</button>
+          <button id="bulk-delete-vision" class="bulk-icon action-danger" title="Удалить выбранные из Vision" aria-label="Удалить выбранные из Vision" disabled>×</button>
+          <button id="bulk-permanent-delete" class="bulk-icon action-danger" title="Удалить выбранные не созданные записи навсегда" aria-label="Удалить выбранные не созданные записи навсегда" disabled>⌫</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="table-wrap">
+      <table>
+        <thead><tr>
+          <th><input id="select-all" type="checkbox" aria-label="Выбрать все видимые"></th>
+          <th>Профиль</th><th>Email</th><th>Код</th><th>Аутентификатор</th><th>ОС</th><th>Статус</th><th>Актуальный прокси</th><th>Действия</th>
+        </tr></thead>
+        <tbody id="accounts"></tbody>
+      </table>
+      <div id="empty" class="empty" hidden>Нет подходящих аккаунтов</div>
+    </section>
+  </main>
+
+  <dialog id="import-dialog" aria-labelledby="import-title"><form id="import-form" method="dialog">
+    <div class="dialog-head"><h2 id="import-title">Импорт аккаунтов</h2><button type="button" id="close-import" class="icon" aria-label="Закрыть">×</button></div>
+    <textarea id="import-text" rows="12" placeholder="email@icloud.com:код&#10;email2@icloud.com:код,pl" required></textarea>
+    <div class="form-row"><label>Префикс <input id="import-prefix" placeholder="newTry" maxlength="60"></label><label>Страна <input id="import-country" list="countries" placeholder="mz"></label><label>ОС <select id="import-os"><option value="win">Windows</option><option value="mac">macOS</option></select></label></div>
+    <p id="import-result" class="message"></p>
+    <div class="dialog-actions"><button type="button" id="cancel-import">Отмена</button><button type="submit" class="primary">Импортировать</button></div>
+  </form></dialog>
+
+  <dialog id="edit-dialog" aria-labelledby="edit-title"><form id="edit-form" method="dialog">
+    <div class="dialog-head"><h2 id="edit-title">Редактирование профиля</h2><button type="button" id="close-edit" class="icon" aria-label="Закрыть">×</button></div>
+    <div class="edit-grid">
+      <label>Название <input id="edit-name" maxlength="120" required></label>
+      <label>Email <input id="edit-email" type="email" required></label>
+      <label>Код <input id="edit-code"></label>
+      <label>Страна <input id="edit-country" list="countries" required></label>
+      <label>ОС <select id="edit-os"><option value="win">Windows</option><option value="mac">macOS</option></select></label>
+    </div>
+    <div class="dialog-actions split"><button type="button" id="delete-from-edit" class="text-danger">Удалить</button><span></span><button type="button" id="cancel-edit">Отмена</button><button type="submit" class="primary">Сохранить</button></div>
+  </form></dialog>
+
+  <dialog id="country-dialog" aria-labelledby="country-title"><form id="country-form" method="dialog">
+    <h2 id="country-title">Смена страны прокси</h2><label class="single-field">Страна <input id="proxy-country" list="countries" placeholder="pl" required></label>
+    <div class="dialog-actions"><button type="button" id="cancel-country">Отмена</button><button type="submit" class="primary">Сменить</button></div>
+  </form></dialog>
+
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><form id="confirm-form" method="dialog">
+    <h2 id="confirm-title">Создание профилей</h2><p id="confirm-text"></p>
+    <div class="dialog-actions"><button type="button" id="cancel-create">Отмена</button><button type="submit" class="primary">Создать</button></div>
+  </form></dialog>
+
+  <dialog id="proxy-confirm-dialog" aria-labelledby="proxy-confirm-title"><form id="proxy-confirm-form" method="dialog">
+    <h2 id="proxy-confirm-title">Заменить прокси?</h2><p id="proxy-confirm-text"></p>
+    <div class="confirmation-details" id="proxy-confirm-details"></div>
+    <div class="dialog-actions"><button type="button" id="cancel-proxy-change">Отмена</button><button type="submit" class="primary">Заменить прокси</button></div>
+  </form></dialog>
+
+  <dialog id="delete-dialog" aria-labelledby="delete-title"><form id="delete-form" method="dialog">
+    <h2 id="delete-title">Удалить профиль из панели?</h2><p id="delete-text"></p>
+    <label id="delete-vision-row" class="check-row"><input id="delete-vision" type="checkbox"> Также удалить профиль из Vision</label>
+    <div class="dialog-actions"><button type="button" id="cancel-delete">Отмена</button><button type="submit" class="danger">Удалить</button></div>
+  </form></dialog>
+
+  <dialog id="delete-vision-dialog" aria-labelledby="delete-vision-title"><form id="delete-vision-form" method="dialog">
+    <h2 id="delete-vision-title">Удалить профиль из Vision?</h2><p id="delete-vision-text"></p>
+    <div class="dialog-actions"><button type="button" id="cancel-delete-vision">Отмена</button><button type="submit" id="submit-delete-vision" class="danger">Удалить из Vision</button></div>
+  </form></dialog>
+
+  <dialog id="permanent-delete-dialog" aria-labelledby="permanent-delete-title"><form id="permanent-delete-form" method="dialog">
+    <h2 id="permanent-delete-title">Удалить запись навсегда?</h2><p id="permanent-delete-text"></p>
+    <div class="dialog-actions"><button type="button" id="cancel-permanent-delete">Отмена</button><button type="submit" id="submit-permanent-delete" class="danger">Удалить навсегда</button></div>
+  </form></dialog>
+
+  <dialog id="bulk-delete-vision-dialog" aria-labelledby="bulk-delete-vision-title"><form id="bulk-delete-vision-form" method="dialog">
+    <h2 id="bulk-delete-vision-title">Удалить выбранные из Vision?</h2><p id="bulk-delete-vision-text"></p>
+    <div class="dialog-actions"><button type="button" id="cancel-bulk-delete-vision">Отмена</button><button type="submit" class="danger">Удалить из Vision</button></div>
+  </form></dialog>
+
+  <dialog id="bulk-permanent-delete-dialog" aria-labelledby="bulk-permanent-delete-title"><form id="bulk-permanent-delete-form" method="dialog">
+    <h2 id="bulk-permanent-delete-title">Удалить выбранные навсегда?</h2><p id="bulk-permanent-delete-text"></p>
+    <div class="dialog-actions"><button type="button" id="cancel-bulk-permanent-delete">Отмена</button><button type="submit" class="danger">Удалить навсегда</button></div>
+  </form></dialog>
+
+  <dialog id="authenticator-dialog" aria-labelledby="authenticator-title"><form id="authenticator-form" method="dialog">
+    <div class="dialog-head"><h2 id="authenticator-title">Аутентификатор</h2><button type="button" id="close-authenticator" class="icon" aria-label="Закрыть">×</button></div>
+    <label class="single-field">Ключ TOTP <input id="authenticator-secret" type="password" autocomplete="off" spellcheck="false" placeholder="JBSWY3DPEHPK3PXP" required></label>
+    <div class="dialog-actions"><button type="button" id="cancel-authenticator">Отмена</button><button type="submit" class="primary">Сохранить ключ</button></div>
+  </form></dialog>
+
+  <dialog id="trash-dialog" aria-labelledby="trash-title"><div class="dialog-panel">
+    <div class="dialog-head"><div><h2 id="trash-title">Корзина</h2><p>Удаленные записи можно вернуть в основной список.</p></div><button type="button" id="close-trash" class="icon" aria-label="Закрыть">×</button></div>
+    <div id="trash-list" class="trash-list"></div>
+  </div></dialog>
+
+  <dialog id="ip-history-dialog" aria-labelledby="ip-history-title"><div class="dialog-panel">
+    <div class="dialog-head"><div><h2 id="ip-history-title">История IP</h2><p id="ip-history-subtitle"></p></div><button type="button" id="close-ip-history" class="icon" aria-label="Закрыть">×</button></div>
+    <div id="ip-history-list" class="ip-history-list"></div>
+  </div></dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <datalist id="countries"></datalist>
+  <script src="/app.js"></script>
+</body>
+</html>

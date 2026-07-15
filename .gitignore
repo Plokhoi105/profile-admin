@@ -1,0 +1,13 @@
+.env.local
+.octo.env.local
+.new-api.env.local
+.env.server
+admin_panel/data/
+server-data/
+outputs/
+__pycache__/
+*.pyc
+*.log
+.claude/
+.agents/
+.codex/
