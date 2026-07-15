@@ -370,11 +370,11 @@ class AdminTelegramBot:
         command = _command_name(text.split(maxsplit=1)[0]) if text else ""
         try:
             if command == "/start":
-                self.telegram.send_message(chat_id, help_text())
+                self.telegram.send_message(chat_id, help_text(), main_keyboard())
             elif command == "/status":
-                self.telegram.send_message(chat_id, format_status(self.backend.accounts()))
+                self.telegram.send_message(chat_id, format_status(self.backend.accounts()), main_keyboard())
             elif command == "/accounts":
-                self.telegram.send_message(chat_id, self.accounts_message(text))
+                self._send_accounts_page(chat_id, text)
             elif command == "/job":
                 self.telegram.send_message(chat_id, self.job_message(text))
             elif command == "/create":
@@ -388,7 +388,7 @@ class AdminTelegramBot:
         except BotError as exc:
             self.telegram.send_message(chat_id, f"Error: {exc}")
 
-    def accounts_message(self, text: str) -> str:
+    def _parse_page(self, text: str) -> int:
         parts = text.split()
         page = 1
         if len(parts) > 2:
@@ -400,24 +400,39 @@ class AdminTelegramBot:
                 raise CommandError("Page must be a number") from exc
         if page < 1:
             raise CommandError("Page must be positive")
+        return page
+
+    def _format_accounts_page(self, page: int) -> tuple[str, int]:
         accounts = self.backend.accounts()
         total_pages = max(1, (len(accounts) + ACCOUNTS_PAGE_SIZE - 1) // ACCOUNTS_PAGE_SIZE)
         start = (page - 1) * ACCOUNTS_PAGE_SIZE
         rows = accounts[start : start + ACCOUNTS_PAGE_SIZE]
-        lines = [f"Accounts page {page}/{total_pages}"]
+        status_icons = {"created": "🟢", "pending_sync": "🟡", "not_created": "⚪", "ready": "⚪", "error": "🔴", "running": "🔵", "queued": "🔵"}
+        lines = [f"📋 Аккаунты — страница {page}/{total_pages}\n"]
         for account in rows:
+            icon = status_icons.get(account.get("status", ""), "⚫")
             lines.append(
-                "#{id} {profile} {country}/{os} {status}".format(
+                "{icon} #{id} {profile} · {country} · {status}".format(
+                    icon=icon,
                     id=account.get("id", "?"),
                     profile=account.get("profile_name", ""),
-                    country=account.get("country", "-") or "-",
-                    os=account.get("fingerprint_os", "-") or "-",
+                    country=str(account.get("country", "-") or "-").upper(),
                     status=account.get("status", "-") or "-",
                 )
             )
         if not rows:
-            lines.append("No accounts on this page.")
-        return "\n".join(lines)
+            lines.append("Нет аккаунтов на этой странице.")
+        return "\n".join(lines), total_pages
+
+    def _send_accounts_page(self, chat_id: int, text: str, message_id: int | None = None) -> None:
+        page = self._parse_page(text)
+        content, total_pages = self._format_accounts_page(page)
+        markup = accounts_keyboard(page, total_pages)
+        if message_id:
+            self.telegram.edit_message(chat_id, message_id, content)
+            self.telegram.call("editMessageReplyMarkup", {"chat_id": chat_id, "message_id": message_id, "reply_markup": markup})
+        else:
+            self.telegram.send_message(chat_id, content, markup)
 
     def job_message(self, text: str) -> str:
         parts = text.split()
@@ -498,6 +513,12 @@ class AdminTelegramBot:
             self.telegram.answer_callback(query_id, "Unauthorized.")
             return
         data = str(callback.get("data") or "")
+
+        # Menu buttons
+        if data.startswith("menu:"):
+            self._handle_menu_callback(query_id, chat_id, message_id, data)
+            return
+
         action, separator, token = data.partition(":")
         if separator != ":" or action not in {"confirm", "cancel"}:
             self.telegram.answer_callback(query_id, "Expired.")
@@ -527,6 +548,36 @@ class AdminTelegramBot:
             if chat_id:
                 self.telegram.send_message(chat_id, f"Error: {exc}")
 
+    def _handle_menu_callback(self, query_id: str, chat_id: int, message_id: int, data: str) -> None:
+        parts = data.split(":")
+        menu_action = parts[1] if len(parts) > 1 else ""
+        try:
+            if menu_action == "home":
+                self.telegram.answer_callback(query_id)
+                if chat_id and message_id:
+                    self.telegram.edit_message(chat_id, message_id, help_text())
+                    self.telegram.call("editMessageReplyMarkup", {"chat_id": chat_id, "message_id": message_id, "reply_markup": main_keyboard()})
+            elif menu_action == "status":
+                self.telegram.answer_callback(query_id)
+                content = format_status(self.backend.accounts())
+                if chat_id and message_id:
+                    self.telegram.edit_message(chat_id, message_id, content)
+                    self.telegram.call("editMessageReplyMarkup", {"chat_id": chat_id, "message_id": message_id, "reply_markup": main_keyboard()})
+            elif menu_action == "accounts":
+                page = int(parts[2]) if len(parts) > 2 else 1
+                self.telegram.answer_callback(query_id)
+                self._send_accounts_page(chat_id, f"/accounts {page}", message_id)
+            elif menu_action == "refresh":
+                self.telegram.answer_callback(query_id, "Обновлено ✓")
+                content = format_status(self.backend.accounts())
+                if chat_id and message_id:
+                    self.telegram.edit_message(chat_id, message_id, content)
+                    self.telegram.call("editMessageReplyMarkup", {"chat_id": chat_id, "message_id": message_id, "reply_markup": main_keyboard()})
+            else:
+                self.telegram.answer_callback(query_id, "Unknown action")
+        except BotError as exc:
+            self.telegram.answer_callback(query_id, f"Error: {exc}")
+
 
 def format_status(accounts: list[dict[str, Any]]) -> str:
     counts = Counter(str(account.get("status") or "unknown") for account in accounts)
@@ -538,13 +589,41 @@ def format_status(accounts: list[dict[str, Any]]) -> str:
 
 def help_text() -> str:
     return (
-        "Commands:\n"
-        "/status\n"
-        "/accounts [page]\n"
-        "/job ID\n"
-        "/create COUNTRY OS IDS_OR_RANGE\n"
-        "/import COUNTRY OS as caption on a .txt document"
+        "📋 Profile Admin Bot\n\n"
+        "Команды:\n"
+        "/status — сводка по статусам\n"
+        "/accounts [page] — список профилей\n"
+        "/job ID — статус задачи\n"
+        "/create COUNTRY OS IDS — создать профили\n"
+        "/import COUNTRY OS — импорт из .txt файла"
     )
+
+
+def main_keyboard() -> dict[str, Any]:
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "📊 Статус", "callback_data": "menu:status"},
+                {"text": "📋 Аккаунты", "callback_data": "menu:accounts:1"},
+            ],
+            [
+                {"text": "🔄 Обновить", "callback_data": "menu:refresh"},
+            ],
+        ]
+    }
+
+
+def accounts_keyboard(page: int, total_pages: int) -> dict[str, Any]:
+    buttons: list[list[dict[str, Any]]] = []
+    nav: list[dict[str, Any]] = []
+    if page > 1:
+        nav.append({"text": "◀ Назад", "callback_data": f"menu:accounts:{page - 1}"})
+    if page < total_pages:
+        nav.append({"text": "Вперед ▶", "callback_data": f"menu:accounts:{page + 1}"})
+    if nav:
+        buttons.append(nav)
+    buttons.append([{"text": "🏠 Меню", "callback_data": "menu:home"}])
+    return {"inline_keyboard": buttons}
 
 
 def main() -> None:
