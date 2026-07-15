@@ -12,8 +12,8 @@ services:
       ADMIN_BOOTSTRAP_PROXIES: /data/bootstrap-proxies.csv
       ADMIN_INLINE_WORKER: 0
       ADMIN_REQUIRE_AUTH: 1
-    ports:
-      - "8765:8765"
+    expose:
+      - "8765"
     volumes:
       - ./server-data:/data
     user: "1000:1000"
@@ -59,6 +59,20 @@ services:
       web:
         condition: service_healthy
 
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+
   bot:
     build: .
     restart: unless-stopped
@@ -84,3 +98,7 @@ services:
     depends_on:
       web:
         condition: service_healthy
+
+volumes:
+  caddy_data:
+  caddy_config:

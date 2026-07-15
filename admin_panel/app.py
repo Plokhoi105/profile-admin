@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import datetime
+import hashlib
+import hmac
 import ipaddress
 import json
 import logging
@@ -12,7 +15,7 @@ import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from admin_panel.core import Database, normalize_country, parse_import
 from admin_panel.integrations import ProfileCreator, ProxySelectionError, VisionApiError, fallback_country_catalog
@@ -33,9 +36,57 @@ if bool(ADMIN_USER) != bool(ADMIN_PASSWORD):
     raise RuntimeError("ADMIN_USER and ADMIN_PASSWORD must both be set or both be empty")
 if REQUIRE_AUTH and not ADMIN_USER:
     raise RuntimeError("ADMIN_USER and ADMIN_PASSWORD are required for this deployment")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_ALLOWED_USER_IDS: set[int] = set()
+_raw_allowed = os.getenv("TELEGRAM_ALLOWED_USER_IDS", "")
+if _raw_allowed:
+    for _uid in _raw_allowed.split(","):
+        _uid = _uid.strip()
+        if _uid:
+            TELEGRAM_ALLOWED_USER_IDS.add(int(_uid))
 COUNTRY_CACHE: dict[str, object] = {"expires_at": 0.0, "countries": None, "source": "fallback"}
 COUNTRY_CACHE_LOCK = threading.Lock()
 INLINE_WORKER = os.getenv("ADMIN_INLINE_WORKER", "1").strip().casefold() not in {"0", "false", "no"}
+
+
+def verify_telegram_init_data(init_data: str, bot_token: str) -> dict | None:
+    """Validate Telegram Mini App initData and return user info or None."""
+    if not init_data or not bot_token:
+        return None
+    try:
+        parsed = parse_qs(init_data, keep_blank_values=True)
+        received_hash = parsed.get("hash", [""])[0]
+        if not received_hash:
+            return None
+        # Build the check string: sorted key=value pairs excluding hash
+        pairs = []
+        for part in init_data.split("&"):
+            key, _, value = part.partition("=")
+            if key != "hash":
+                pairs.append(part)
+        pairs.sort()
+        check_string = "\n".join(pairs)
+        # HMAC: secret_key = HMAC-SHA256("WebAppData", bot_token)
+        secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
+        computed_hash = hmac.new(secret_key, check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(computed_hash, received_hash):
+            return None
+        # Check auth_date freshness (24 hours)
+        auth_date_str = parsed.get("auth_date", [""])[0]
+        if not auth_date_str:
+            return None
+        auth_dt = datetime.datetime.fromtimestamp(int(auth_date_str), tz=datetime.timezone.utc)
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        if (now - auth_dt).total_seconds() > 86400:
+            return None
+        # Parse user JSON
+        user_raw = parsed.get("user", [""])[0]
+        if not user_raw:
+            return None
+        user = json.loads(user_raw)
+        return user
+    except Exception:
+        return None
 
 
 def init_db() -> Database:
@@ -94,6 +145,16 @@ class Handler(BaseHTTPRequestHandler):
             return True
         if basic_auth_matches(self.headers.get("Authorization", ""), ADMIN_USER, ADMIN_PASSWORD):
             return True
+        # Telegram Mini App initData auth
+        tg_init_data = self.headers.get("X-Telegram-Init-Data", "")
+        if tg_init_data and TELEGRAM_BOT_TOKEN:
+            user = verify_telegram_init_data(tg_init_data, TELEGRAM_BOT_TOKEN)
+            if user is not None:
+                user_id = user.get("id")
+                if isinstance(user_id, int) and (
+                    not TELEGRAM_ALLOWED_USER_IDS or user_id in TELEGRAM_ALLOWED_USER_IDS
+                ):
+                    return True
         body = b"Authentication required"
         self.send_response(HTTPStatus.UNAUTHORIZED)
         self.send_header("WWW-Authenticate", 'Basic realm="Profile Admin", charset="UTF-8"')
@@ -112,6 +173,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def reject_cross_site(self) -> bool:
         if self.headers.get("Sec-Fetch-Site", "").casefold() != "cross-site":
+            return False
+        # Allow cross-site requests authenticated via Telegram initData
+        if self.headers.get("X-Telegram-Init-Data", ""):
             return False
         self.send_json({"error": "Cross-site requests are not allowed"}, HTTPStatus.FORBIDDEN)
         return True
@@ -141,6 +205,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
+        if path == "/mini":
+            self.serve_mini()
+            return
         if not self.authorize(path):
             return
         db = get_db()
@@ -492,6 +559,26 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"account": account}, 200 if account else 404)
         except (ValueError, json.JSONDecodeError) as exc:
             self.send_json({"error": str(exc)}, 400)
+
+    def serve_mini(self) -> None:
+        candidate = STATIC / "mini.html"
+        if not candidate.is_file():
+            self.send_error(404)
+            return
+        body = candidate.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline' https://telegram.org; "
+            "style-src 'self' 'unsafe-inline'; frame-ancestors https://web.telegram.org; "
+            "base-uri 'none'",
+        )
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def serve_static(self, path: str) -> None:
         relative = "index.html" if path in {"", "/"} else path.lstrip("/")

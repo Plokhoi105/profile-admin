@@ -1,0 +1,3 @@
+profilepanel.duckdns.org {
+	reverse_proxy web:8765
+}
