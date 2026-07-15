@@ -10,7 +10,10 @@ class BasicAuthTests(unittest.TestCase):
         return "Basic " + base64.b64encode(value.encode("utf-8")).decode("ascii")
 
     def test_disabled_auth_accepts_request(self):
-        self.assertTrue(basic_auth_matches("", "", ""))
+        # With allow_anonymous=True, empty credentials should pass
+        self.assertTrue(basic_auth_matches("", "", "", allow_anonymous=True))
+        # Without allow_anonymous, empty credentials should be rejected
+        self.assertFalse(basic_auth_matches("", "", ""))
 
     def test_valid_credentials_are_accepted(self):
         self.assertTrue(basic_auth_matches(self.header("alex:secret"), "alex", "secret"))
