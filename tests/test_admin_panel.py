@@ -265,7 +265,7 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(row["country"], "mz")
         self.assertEqual(row["fingerprint_os"], "mac")
 
-    def test_codes_are_optional_through_50_and_generated_after_50(self):
+    def test_codes_are_auto_generated_when_empty(self):
         accounts, errors = parse_import(
             "newTry[50] fifty@example.com\nnewTry[51] fiftyone@example.com",
             "mz",
@@ -274,13 +274,13 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.db.import_accounts(accounts)
         rows = self.db.list_accounts()
-        self.assertEqual(rows[0]["code"], "")
+        self.assertEqual(len(rows[0]["code"]), 10)
+        self.assertTrue(rows[0]["code"].isalnum())
         self.assertEqual(len(rows[1]["code"]), 10)
         self.assertTrue(rows[1]["code"].isalnum())
-        self.assertTrue(any(character.isdigit() for character in rows[1]["code"]))
 
-    def test_clearing_code_after_50_generates_a_replacement(self):
-        accounts, _ = parse_import("newTry[51] account@example.com:Manual1", "mz", "win")
+    def test_clearing_code_generates_a_replacement(self):
+        accounts, _ = parse_import("newTry[1] account@example.com:Manual1", "mz", "win")
         self.db.import_accounts(accounts)
         updated = self.db.update_account(1, {"code": ""})
         self.assertIsNotNone(updated)

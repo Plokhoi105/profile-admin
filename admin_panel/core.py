@@ -144,8 +144,7 @@ def generate_code(length: int = AUTO_CODE_LENGTH) -> str:
 
 def ensure_account_code(profile_name: str, code: str) -> str:
     code = code.strip().strip("*")
-    index = profile_index(profile_name)
-    if not code and index is not None and index >= AUTO_CODE_START_INDEX:
+    if not code:
         return generate_code()
     return code
 
