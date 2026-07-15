@@ -164,14 +164,16 @@
 
   /* Account list */
   .account-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
     padding: 12px 14px;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 10px;
     margin-bottom: 8px;
+  }
+  .account-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
   .account-status {
     width: 10px;
@@ -181,6 +183,8 @@
   }
   .account-status.created { background: var(--success); }
   .account-status.not_created { background: var(--text-dim); }
+  .account-status.ready { background: var(--text-dim); }
+  .account-status.pending_sync { background: var(--warning); }
   .account-status.pending { background: var(--warning); }
   .account-status.error { background: var(--danger); }
   .account-status.queued, .account-status.running { background: var(--accent); }
@@ -197,11 +201,29 @@
     color: var(--text-dim);
     margin-top: 2px;
   }
-  .account-country {
-    font-size: 12px;
-    color: var(--text-dim);
-    flex-shrink: 0;
+  .account-tags {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
   }
+  .account-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--bg-input);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .account-tag:active { transform: scale(0.95); }
+  .account-tag.tag-country { color: #3b82f6; border-color: rgba(59,130,246,0.3); }
+  .account-tag.tag-os { color: #a78bfa; border-color: rgba(167,139,250,0.3); }
   .account-actions {
     display: flex;
     gap: 6px;
@@ -232,6 +254,55 @@
   .act-btn.act-fraud { color: var(--warning); border-color: rgba(210,153,34,0.3); }
   .act-btn.act-proxy { color: #3b82f6; border-color: rgba(59,130,246,0.3); }
   .act-btn.act-delete { color: var(--danger); border-color: rgba(248,81,73,0.3); }
+
+  /* Country/OS picker modal */
+  .picker-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 150;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .picker-sheet {
+    background: var(--bg-card);
+    border-radius: 16px 16px 0 0;
+    width: 100%;
+    max-width: 420px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 16px;
+  }
+  .picker-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  .picker-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .picker-option {
+    padding: 10px 8px;
+    border-radius: 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+  }
+  .picker-option:active { transform: scale(0.95); }
+  .picker-option.selected {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
 
   /* Bottom nav */
   .bottom-nav {
@@ -547,9 +618,9 @@ function renderAccounts() {
     return;
   }
   list.innerHTML = filtered.map(a => {
-    const statusClass = ['queued', 'running'].includes(a.status) ? a.status :
-                        (a.status || 'not_created');
-    const countryFlag = a.country ? a.country.toUpperCase() : '';
+    const statusClass = a.status || 'not_created';
+    const countryLabel = a.country ? a.country.toUpperCase() : 'Страна';
+    const osLabel = a.fingerprint_os === 'mac' ? 'macOS' : 'Windows';
     const isCreated = a.status === 'created';
     const isNotCreated = a.status === 'not_created' || a.status === 'ready';
     const isPending = a.status === 'pending_sync';
@@ -558,23 +629,30 @@ function renderAccounts() {
     if (isNotCreated) {
       actions = '<div class="account-actions">' +
         '<button class="act-btn act-create" onclick="createOne(' + a.id + ',this)">➕ Создать</button>' +
-        '<button class="act-btn act-delete" onclick="deleteOne(' + a.id + ',this)">🗑</button>' +
+        '<button class="act-btn act-delete" onclick="deleteOne(' + a.id + ',this)">🗑 Удалить</button>' +
       '</div>';
     } else if (isCreated || isPending) {
       actions = '<div class="account-actions">' +
         '<button class="act-btn act-sync" onclick="syncOne(' + a.id + ',this)">↻ Синхр</button>' +
         '<button class="act-btn act-fraud" onclick="fraudCheck(' + a.id + ',this)">⬥ Fraud</button>' +
         '<button class="act-btn act-proxy" onclick="rotateProxy(' + a.id + ',this)">⟳ Прокси</button>' +
+        '<button class="act-btn act-delete" onclick="deleteOne(' + a.id + ',this)">🗑</button>' +
       '</div>';
     }
-    return '<div class="account-item" style="flex-wrap:wrap">' +
-      '<div class="account-status ' + statusClass + '"></div>' +
-      '<div class="account-info">' +
-        '<div class="account-name">' + escapeHtml(a.profile_name || a.email) + '</div>' +
-        '<div class="account-meta">' + escapeHtml(a.status || 'not_created') +
-          (a.fraud_score >= 0 ? ' · fraud: ' + a.fraud_score : '') + '</div>' +
+    const tags = '<div class="account-tags">' +
+      '<span class="account-tag tag-country" onclick="pickCountry(' + a.id + ')">' + escapeHtml(countryLabel) + '</span>' +
+      '<span class="account-tag tag-os" onclick="pickOS(' + a.id + ')">' + escapeHtml(osLabel) + '</span>' +
+      (a.fraud_score >= 0 ? '<span class="account-tag">fraud: ' + a.fraud_score + '</span>' : '') +
+    '</div>';
+    return '<div class="account-item">' +
+      '<div class="account-header">' +
+        '<div class="account-status ' + statusClass + '"></div>' +
+        '<div class="account-info">' +
+          '<div class="account-name">' + escapeHtml(a.profile_name || a.email) + '</div>' +
+          '<div class="account-meta">' + escapeHtml(a.email) + '</div>' +
+        '</div>' +
       '</div>' +
-      '<div class="account-country">' + escapeHtml(countryFlag) + '</div>' +
+      tags +
       actions +
     '</div>';
   }).join('');
@@ -743,6 +821,69 @@ function doDelete(id, btn) {
     loadAccounts();
   }).catch(e => toast(e.error || 'Ошибка', 'error'))
     .finally(() => { btn.disabled = false; });
+}
+
+const COUNTRY_LIST = [
+  {code:'mz',name:'Mozambique'},{code:'ua',name:'Ukraine'},{code:'pl',name:'Poland'},
+  {code:'de',name:'Germany'},{code:'fr',name:'France'},{code:'es',name:'Spain'},
+  {code:'it',name:'Italy'},{code:'pt',name:'Portugal'},{code:'us',name:'USA'},
+  {code:'gb',name:'UK'},{code:'ca',name:'Canada'},{code:'br',name:'Brazil'},
+  {code:'mx',name:'Mexico'},{code:'tr',name:'Turkey'},{code:'in',name:'India'},
+  {code:'id',name:'Indonesia'},{code:'vn',name:'Vietnam'},{code:'jp',name:'Japan'},
+  {code:'au',name:'Australia'},{code:'za',name:'South Africa'},
+];
+
+function pickCountry(accountId) {
+  const account = allAccounts.find(a => a.id === accountId);
+  if (!account) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'picker-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  const options = COUNTRY_LIST.map(c =>
+    '<button class="picker-option' + (account.country === c.code ? ' selected' : '') +
+    '" onclick="setCountry(' + accountId + ',\'' + c.code + '\')">' +
+    c.code.toUpperCase() + ' ' + escapeHtml(c.name) + '</button>'
+  ).join('');
+  overlay.innerHTML = '<div class="picker-sheet">' +
+    '<div class="picker-title">Выбери страну</div>' +
+    '<div class="picker-grid">' + options + '</div></div>';
+  document.body.appendChild(overlay);
+}
+
+function setCountry(id, code) {
+  document.querySelector('.picker-overlay')?.remove();
+  api('PATCH', '/api/accounts/' + id, {country: code}).then(() => {
+    toast('Страна: ' + code.toUpperCase(), 'success');
+    loadAccounts();
+  }).catch(e => toast(e.error || 'Ошибка', 'error'));
+}
+
+function pickOS(accountId) {
+  const account = allAccounts.find(a => a.id === accountId);
+  if (!account) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'picker-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  const osOptions = [
+    {code: 'win', name: 'Windows'},
+    {code: 'mac', name: 'macOS'},
+  ];
+  const options = osOptions.map(o =>
+    '<button class="picker-option' + (account.fingerprint_os === o.code ? ' selected' : '') +
+    '" onclick="setOS(' + accountId + ',\'' + o.code + '\')">' + o.name + '</button>'
+  ).join('');
+  overlay.innerHTML = '<div class="picker-sheet">' +
+    '<div class="picker-title">Выбери ОС</div>' +
+    '<div class="picker-grid">' + options + '</div></div>';
+  document.body.appendChild(overlay);
+}
+
+function setOS(id, code) {
+  document.querySelector('.picker-overlay')?.remove();
+  api('PATCH', '/api/accounts/' + id, {fingerprint_os: code}).then(() => {
+    toast('ОС: ' + (code === 'mac' ? 'macOS' : 'Windows'), 'success');
+    loadAccounts();
+  }).catch(e => toast(e.error || 'Ошибка', 'error'));
 }
 
 function escapeHtml(str) {
