@@ -424,6 +424,9 @@ class Handler(BaseHTTPRequestHandler):
                     country = cm2.group(1).lower()
             proxy_id = str(vp.get("proxy_id") or (proxy or {}).get("id") or "")
             proxy_endpoint = creator.proxy_endpoint(proxy) if proxy else ""
+            # Determine OS from Vision platform
+            platform = str(vp.get("platform") or "").lower()
+            fos = "mac" if "mac" in platform else "win"
             if not code:
                 code = generate_code()
             ts = now_iso()
@@ -435,7 +438,7 @@ class Handler(BaseHTTPRequestHandler):
                             vision_profile_id, vision_proxy_id, proxy_endpoint,
                             created_at, updated_at
                         ) VALUES (?, ?, ?, ?, ?, 'created', ?, ?, ?, ?, ?)""",
-                        (panel_name, email_addr, code, country, "win",
+                        (panel_name, email_addr, code, country, fos,
                          profile_id, proxy_id, proxy_endpoint, ts, ts),
                     )
                 existing_emails.add(email_addr)

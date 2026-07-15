@@ -423,6 +423,10 @@ class ProfileCreator:
             "GET", f"{self.vision_base}/folders/{self.folder_id}/profiles", self.vision_token
         )
         data = response.get("data")
+        if isinstance(data, dict):
+            items = data.get("items")
+            if isinstance(items, list):
+                return [p for p in items if isinstance(p, dict)]
         if isinstance(data, list):
             return [p for p in data if isinstance(p, dict)]
         return []
