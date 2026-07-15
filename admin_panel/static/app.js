@@ -439,15 +439,42 @@ function openBybitCookies(id) {
   $("#bybit-cookies-dialog").showModal();
 }
 
+function parseNetscapeCookies(text) {
+  const cookies = [];
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const parts = trimmed.split("\t");
+    if (parts.length >= 7) {
+      cookies.push({
+        domain: parts[0],
+        httpOnly: parts[1].toUpperCase() === "TRUE",
+        path: parts[2],
+        secure: parts[3].toUpperCase() === "TRUE",
+        expirationDate: parseInt(parts[4], 10) || 0,
+        name: parts[5],
+        value: parts[6],
+      });
+    }
+  }
+  return cookies;
+}
+
 async function saveBybitCookies() {
   const id = state.bybitCookiesAccountId;
   if (!id) return;
   const raw = $("#bybit-cookies-input").value.trim();
   if (!raw) return;
   try {
-    const cookies = JSON.parse(raw);
+    let cookies;
+    if (raw.startsWith("[")) {
+      cookies = JSON.parse(raw);
+    } else {
+      cookies = parseNetscapeCookies(raw);
+      if (!cookies.length) throw new Error("Не удалось распознать cookies. Поддерживается JSON и Netscape TXT формат.");
+    }
     await api(`/api/accounts/${id}/bybit-cookies`, { method: "POST", body: JSON.stringify({ cookies }) });
-    toast("Cookies сохранены");
+    toast(`Cookies сохранены (${cookies.length} шт.)`);
     $("#bybit-cookies-dialog").close();
     loadAccounts();
   } catch (error) {

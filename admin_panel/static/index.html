@@ -155,8 +155,8 @@
 
   <dialog id="bybit-cookies-dialog"><div class="dialog-panel">
     <div class="dialog-head"><h2 id="bybit-cookies-title">Bybit cookies</h2><button type="button" class="icon" onclick="this.closest('dialog').close()">✕</button></div>
-    <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Экспортируйте cookies с bybit.com через расширение Cookie-Editor (JSON формат) и вставьте сюда:</p>
-    <textarea id="bybit-cookies-input" rows="10" placeholder='[{"name":"...","value":"..."},...]'></textarea>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Экспортируйте cookies с bybit.com из Vision (TXT) или через Cookie-Editor (JSON) и вставьте сюда:</p>
+    <textarea id="bybit-cookies-input" rows="10" placeholder="Вставьте cookies в формате JSON или Netscape TXT"></textarea>
     <div class="dialog-actions">
       <button type="button" onclick="$('#bybit-cookies-dialog').close()">Отмена</button>
       <button type="button" class="primary" onclick="saveBybitCookies()">Сохранить</button>
