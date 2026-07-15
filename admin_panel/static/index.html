@@ -62,7 +62,7 @@
       <table>
         <thead><tr>
           <th><input id="select-all" type="checkbox" aria-label="Выбрать все видимые"></th>
-          <th>Профиль</th><th>Email</th><th>Код</th><th>Аутентификатор</th><th>Email код</th><th>ОС</th><th>Статус</th><th>Актуальный прокси</th><th>Действия</th>
+          <th>Профиль</th><th>Email</th><th>Депозит</th><th>Код</th><th>Аутентификатор</th><th>Email код</th><th>ОС</th><th>Статус</th><th>Актуальный прокси</th><th>Действия</th>
         </tr></thead>
         <tbody id="accounts"></tbody>
       </table>
@@ -179,8 +179,20 @@
   <dialog id="deposit-dialog"><div class="dialog-panel">
     <div class="dialog-head"><h2 id="deposit-title">Депозит</h2><button type="button" class="icon" id="close-deposit">✕</button></div>
     <div class="form-row">
-      <label style="flex:1">Монета<input id="deposit-coin" value="USDT" placeholder="USDT"></label>
-      <label style="flex:1">Сеть<input id="deposit-chain" value="BSC" placeholder="BSC"></label>
+      <label style="flex:1">Монета<input id="deposit-coin" value="USDT" readonly style="opacity:0.6;cursor:default"></label>
+      <label style="flex:1">Сеть
+        <select id="deposit-chain">
+          <option value="BSC" selected>BSC (BEP20)</option>
+          <option value="ETH">ERC20</option>
+          <option value="TRX">TRC20</option>
+          <option value="SOL">Solana</option>
+          <option value="ARBI">Arbitrum One</option>
+          <option value="OPTI">Optimism</option>
+          <option value="MATIC">Polygon</option>
+          <option value="AVAXC">Avalanche C</option>
+          <option value="TON">TON</option>
+        </select>
+      </label>
     </div>
     <div class="dialog-actions" style="margin-top:14px">
       <button type="button" class="primary" id="deposit-fetch-btn">Получить адрес</button>
