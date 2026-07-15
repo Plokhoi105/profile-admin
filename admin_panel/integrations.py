@@ -714,26 +714,21 @@ def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", ch
     if not cookie_header:
         raise ValueError("No valid cookies found")
 
-    host = "api2.bybit.com"
-    post_body = json.dumps({"coin": coin, "chain_type": chain})
-    path = "/asset/api/common/deposit/query-deposit-address"
+    host = "www.bybit.com"
+    path = f"/x-api/v3/private/cht/asset-deposit/deposit/address-chain?coin={urllib.parse.quote(coin)}&chain={urllib.parse.quote(chain)}"
 
     connection = socks5_connect(proxy, host, 443)
     try:
         context = ssl.create_default_context()
         with context.wrap_socket(connection, server_hostname=host) as secure:
             request_line = (
-                f"POST {path} HTTP/1.1\r\n"
+                f"GET {path} HTTP/1.1\r\n"
                 f"Host: {host}\r\n"
                 f"Cookie: {cookie_header}\r\n"
-                f"Content-Type: application/json\r\n"
-                f"Content-Length: {len(post_body)}\r\n"
                 f"Accept: application/json\r\n"
                 f"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36\r\n"
-                f"Referer: https://www.bybit.com/\r\n"
-                f"Origin: https://www.bybit.com\r\n"
+                f"Referer: https://www.bybit.com/fiat/deposit\r\n"
                 f"Connection: close\r\n\r\n"
-                f"{post_body}"
             )
             secure.sendall(request_line.encode("utf-8"))
             response = bytearray()
