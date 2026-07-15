@@ -138,7 +138,7 @@ class MailChecker:
             # Process last 100 at most
             for msg_id in msg_ids[-100:]:
                 try:
-                    status, msg_data = conn.fetch(msg_id, "(RFC822)")
+                    status, msg_data = conn.fetch(msg_id, "(BODY.PEEK[])")
                     if status != "OK" or not msg_data:
                         continue
                     # Find the tuple part containing raw email bytes
