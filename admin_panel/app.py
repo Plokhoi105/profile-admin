@@ -294,7 +294,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": str(exc)}, 400)
         except RuntimeError as exc:
             logger.error("External service error: %s", exc)
-            self.send_json({"error": "External service request failed"}, HTTPStatus.BAD_GATEWAY)
+            self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
         except Exception as exc:
             logger.error("Internal request error: %s", exc)
             self.send_json({"error": "Internal server error"}, 500)
@@ -697,7 +697,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": str(exc)}, 400)
         except RuntimeError as exc:
             logger.error("External service error: %s", exc)
-            self.send_json({"error": "External service request failed"}, HTTPStatus.BAD_GATEWAY)
+            self.send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
         except Exception as exc:
             logger.error("Internal delete error: %s", exc)
             self.send_json({"error": "Internal server error"}, 500)
