@@ -627,8 +627,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         proxy_data = creator._normalize_raw_proxy(proxy)
         coin = str(data.get("coin", "USDT"))
-        chain = str(data.get("chain", "TRC20"))
+        chain = str(data.get("chain", "BSC"))
         result = bybit_deposit_address(cookies_json, proxy_data, coin, chain)
+        if result.get("address"):
+            db.set_deposit_address(account_id, result["address"])
         self.send_json(result)
 
     def _handle_create_job(self, data: dict) -> None:
