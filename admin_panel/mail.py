@@ -138,11 +138,16 @@ class MailChecker:
             for msg_id in msg_ids[-100:]:
                 try:
                     status, msg_data = conn.fetch(msg_id, "(RFC822)")
-                    if status != "OK" or not msg_data[0]:
+                    if status != "OK" or not msg_data:
                         continue
-                    raw_email = msg_data[0][1]
-                    if isinstance(raw_email, str):
-                        raw_email = raw_email.encode("utf-8")
+                    # Find the tuple part containing raw email bytes
+                    raw_email = None
+                    for part in msg_data:
+                        if isinstance(part, tuple) and len(part) == 2 and isinstance(part[1], bytes):
+                            raw_email = part[1]
+                            break
+                    if raw_email is None:
+                        continue
                     msg = email.message_from_bytes(raw_email)
 
                     message_id = msg.get("Message-ID", "").strip()

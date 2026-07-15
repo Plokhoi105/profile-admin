@@ -335,11 +335,17 @@ tbody tr:hover td:last-child { background: rgba(18, 22, 28, 0.98); }
 }
 .icon-small:hover { color: var(--accent); background: var(--accent-dim); border-color: transparent; }
 
-.email-cell { font-size: 11.5px; display: flex; align-items: center; gap: 4px; }
+.email-cell { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.email-cell .copy-email {
+  display: inline !important; width: auto !important; min-height: 0 !important; padding: 0 !important;
+}
 .email-cell .emails-btn {
-  flex-shrink: 0; padding: 2px 4px; font-size: 12px; cursor: pointer;
-  background: none; border: none; color: var(--text-dim); opacity: 0.6;
-  transition: opacity 0.2s;
+  display: inline !important; vertical-align: baseline;
+  width: auto !important; min-height: 0 !important; height: auto !important;
+  padding: 0 3px !important; margin: 0;
+  font-size: 12px; line-height: 1; cursor: pointer;
+  background: none !important; border: none !important; color: var(--muted); opacity: 0.5;
+  transition: opacity 0.2s, color 0.2s;
 }
 .email-cell .emails-btn:hover { opacity: 1; color: var(--accent); }
 .inline-copy {
