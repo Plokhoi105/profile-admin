@@ -553,9 +553,12 @@ def main() -> None:
     backend = BackendClient(config.admin_url, config.admin_user, config.admin_password)
     bot = AdminTelegramBot(telegram, backend, config.allowed_user_ids)
     offset: int | None = None
+    print(f"Bot started, allowed users: {config.allowed_user_ids}", flush=True)
     while True:
         try:
             updates = telegram.get_updates(offset)
+            if updates:
+                print(f"Got {len(updates)} update(s)", flush=True)
             for update in updates:
                 update_id = int(update.get("update_id", 0))
                 offset = update_id + 1
