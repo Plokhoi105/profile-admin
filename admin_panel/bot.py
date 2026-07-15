@@ -295,7 +295,8 @@ class TelegramClient:
             data = exc.read()
         parsed = json.loads(data.decode("utf-8") or "{}")
         if status >= 400 or not parsed.get("ok"):
-            raise BotError(f"Telegram API error in {method}")
+            description = parsed.get("description", "unknown error")
+            raise BotError(f"Telegram API error in {method}: {status} {description}")
         result = parsed.get("result")
         return result if isinstance(result, dict) else {"value": result}
 
