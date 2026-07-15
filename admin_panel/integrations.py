@@ -706,13 +706,14 @@ def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", ch
     if not isinstance(cookie_list, list):
         raise ValueError("Cookies must be a JSON array")
 
-    # Build cookie header string
+    # Filter to bybit.com cookies only and build cookie header
     cookie_header = "; ".join(
         f"{c['name']}={c['value']}" for c in cookie_list
         if isinstance(c, dict) and "name" in c and "value" in c
+        and "bybit" in str(c.get("domain", "")).lower()
     )
     if not cookie_header:
-        raise ValueError("No valid cookies found")
+        raise ValueError("Не найдено cookies от bybit.com — убедитесь что вы залогинены на Bybit в этом профиле")
 
     host = "www.bybit.com"
     path = f"/x-api/v3/private/cht/asset-deposit/deposit/address-chain?coin={urllib.parse.quote(coin)}&chain={urllib.parse.quote(chain)}"
