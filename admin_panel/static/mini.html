@@ -674,6 +674,7 @@ function renderAccounts() {
     if (isNotCreated) {
       actions = '<div class="account-actions">' +
         '<button class="act-btn act-create" onclick="createOne(' + a.id + ',this)">➕ Создать</button>' +
+        '<button class="act-btn" onclick="openEmails(' + a.id + ')">📧 Почта</button>' +
         '<button class="act-btn act-delete" onclick="deleteOne(' + a.id + ',this)">🗑 Удалить</button>' +
       '</div>';
     } else if (isCreated || isPending) {
@@ -681,6 +682,7 @@ function renderAccounts() {
         '<button class="act-btn act-sync" onclick="syncOne(' + a.id + ',this)">↻ Синхр</button>' +
         '<button class="act-btn act-fraud" onclick="fraudCheck(' + a.id + ',this)">⬥ Fraud</button>' +
         '<button class="act-btn act-proxy" onclick="rotateProxy(' + a.id + ',this)">⟳ Прокси</button>' +
+        '<button class="act-btn" onclick="openEmails(' + a.id + ')">📧</button>' +
         '<button class="act-btn act-delete" onclick="deleteOne(' + a.id + ',this)">🗑</button>' +
       '</div>';
     }
@@ -1024,6 +1026,45 @@ function setOS(id, code) {
     toast('ОС: ' + (code === 'mac' ? 'macOS' : 'Windows'), 'success');
     loadAccounts();
   }).catch(e => toast(e.error || 'Ошибка', 'error'));
+}
+
+function openEmails(accountId) {
+  var account = allAccounts.find(a => a.id === accountId);
+  var overlay = document.createElement('div');
+  overlay.className = 'picker-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = '<div class="picker-sheet">' +
+    '<div class="picker-title">📧 Почта ' + escapeHtml(account ? account.email : '') + '</div>' +
+    '<div class="picker-list" id="emails-content" style="padding:8px 0">Загрузка...</div></div>';
+  document.body.appendChild(overlay);
+  api('GET', '/api/accounts/' + accountId + '/emails').then(function(data) {
+    var emails = data.emails || [];
+    var el = document.getElementById('emails-content');
+    if (!el) return;
+    if (!emails.length) { el.innerHTML = '<div class="empty-state">Писем пока нет</div>'; return; }
+    el.innerHTML = emails.map(function(e) {
+      var date = new Date(e.received_at);
+      var dateStr = isNaN(date.getTime()) ? e.received_at : date.toLocaleString('ru-RU');
+      var unread = !e.is_read ? 'border-left:3px solid var(--accent);' : '';
+      return '<div style="padding:10px 12px;border-bottom:1px solid var(--border);' + unread + '" onclick="markRead(' + e.id + ',this)">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
+          '<span style="font-size:12px;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + escapeHtml(e.sender) + '</span>' +
+          '<span style="font-size:10px;color:var(--text-dim);white-space:nowrap;margin-left:8px">' + escapeHtml(dateStr) + '</span>' +
+        '</div>' +
+        '<div style="font-size:13px;font-weight:600;margin-bottom:4px">' + escapeHtml(e.subject) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-dim);max-height:60px;overflow:hidden;white-space:pre-wrap;word-break:break-word">' + escapeHtml(e.body_text).substring(0, 300) + '</div>' +
+      '</div>';
+    }).join('');
+  }).catch(function(e) {
+    var el = document.getElementById('emails-content');
+    if (el) el.innerHTML = '<div class="empty-state">' + escapeHtml(e.error || 'Ошибка') + '</div>';
+  });
+}
+
+function markRead(emailId, el) {
+  api('POST', '/api/emails/' + emailId + '/read', {}).then(function() {
+    if (el) el.style.borderLeft = '';
+  }).catch(function() {});
 }
 
 function escapeHtml(str) {

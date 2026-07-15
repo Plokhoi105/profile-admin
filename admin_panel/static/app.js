@@ -118,6 +118,7 @@ function render() {
           ${proxyActionButton({ className: "change-country", icon: "&#9678;", label: "Сменить страну прокси", disabled: !canRotate })}
           ${proxyActionButton({ className: "check-fraud", icon: checkingFraud ? "&#8230;" : "&#9672;", label: checkingFraud ? "Fraud score проверяется" : "Проверить fraud score", disabled: !account.vision_proxy_id || busy || checkingFraud, working: checkingFraud })}
           ${hasProxy ? proxyActionButton({ className: "ip-history-btn", icon: "&#9776;", label: "История IP и fraud score" }) : ""}
+          ${proxyActionButton({ className: "emails-btn", icon: "&#9993;", label: "Входящие письма" })}
         </div>
       </td>
       <td class="actions-cell"><div class="row-icon-actions">
@@ -212,6 +213,7 @@ accountsBody.addEventListener("click", async (event) => {
   }
   if (event.target.closest(".copy-proxy")) return copyProxy(id);
   if (event.target.closest(".ip-history-btn")) return openIpHistory(id);
+  if (event.target.closest(".emails-btn")) return openEmails(id);
   if (event.target.closest(".change-country")) {
     const account = state.accounts.find((item) => item.id === id); state.countryAccountId = id;
     $("#proxy-country").value = account?.country || ""; $("#country-dialog").showModal(); return;
@@ -380,6 +382,44 @@ async function openIpHistory(id) {
   }
 }
 
+async function openEmails(id) {
+  const account = state.accounts.find((a) => a.id === id);
+  if (!account) return;
+  $("#emails-subtitle").textContent = `${actualName(account)} · ${account.email}`;
+  $("#emails-list").innerHTML = '<div class="ip-history-loading">Загрузка...</div>';
+  $("#emails-dialog").showModal();
+  try {
+    const data = await api(`/api/accounts/${id}/emails`);
+    const emails = data.emails || [];
+    if (!emails.length) {
+      $("#emails-list").innerHTML = '<div class="ip-history-empty">Писем пока нет</div>';
+      return;
+    }
+    $("#emails-list").innerHTML = emails.map((e) => {
+      const date = new Date(e.received_at);
+      const dateStr = Number.isNaN(date.getTime()) ? e.received_at : date.toLocaleString("ru-RU");
+      const unread = !e.is_read ? ' style="border-left:3px solid var(--accent)"' : '';
+      return `<div class="email-item"${unread} data-email-id="${e.id}" onclick="markEmailRead(${e.id}, this)">
+        <div class="email-header">
+          <span class="email-from">${escapeHtml(e.sender)}</span>
+          <span class="email-date">${escapeHtml(dateStr)}</span>
+        </div>
+        <div class="email-subject">${escapeHtml(e.subject)}</div>
+        <div class="email-body">${escapeHtml(e.body_text).substring(0, 300)}</div>
+      </div>`;
+    }).join("");
+  } catch (error) {
+    $("#emails-list").innerHTML = `<div class="ip-history-empty">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function markEmailRead(emailId, el) {
+  try {
+    await api(`/api/emails/${emailId}/read`, { method: "POST" });
+    if (el) el.style.borderLeft = "";
+  } catch { /* ignore */ }
+}
+
 function openDeleteVision(id) {
   const account = state.accounts.find((item) => item.id === id); if (!account?.vision_profile_id) return;
   state.deleteVisionAccountId = id;
@@ -483,6 +523,7 @@ $("#open-trash").addEventListener("click", async () => {
 });
 $("#close-trash").addEventListener("click", () => $("#trash-dialog").close());
 $("#close-ip-history").addEventListener("click", () => $("#ip-history-dialog").close());
+$("#close-emails").addEventListener("click", () => $("#emails-dialog").close());
 $("#trash-list").addEventListener("click", async (event) => {
   const button = event.target.closest(".restore-account"); if (!button) return;
   const item = button.closest(".trash-item"); const id = Number(item?.dataset.id); if (!id) return;

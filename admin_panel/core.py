@@ -284,6 +284,18 @@ class Database:
                     fraud_risk TEXT NOT NULL DEFAULT '',
                     checked_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS emails (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                    message_id TEXT NOT NULL DEFAULT '',
+                    sender TEXT NOT NULL DEFAULT '',
+                    subject TEXT NOT NULL DEFAULT '',
+                    body_text TEXT NOT NULL DEFAULT '',
+                    received_at TEXT NOT NULL,
+                    is_read INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_emails_msgid
+                    ON emails(message_id) WHERE message_id != '';
                 """
             )
             columns = {row["name"] for row in connection.execute("PRAGMA table_info(accounts)")}
@@ -963,3 +975,39 @@ class Database:
                 (account_id, limit),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def store_email(self, account_id: int, message_id: str, sender: str, subject: str, body_text: str, received_at: str) -> int | None:
+        with self.connect() as connection:
+            if message_id:
+                existing = connection.execute("SELECT id FROM emails WHERE message_id = ?", (message_id,)).fetchone()
+                if existing:
+                    return None
+            cursor = connection.execute(
+                "INSERT INTO emails (account_id, message_id, sender, subject, body_text, received_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (account_id, message_id, sender, subject, body_text, received_at),
+            )
+            return cursor.lastrowid
+
+    def account_emails(self, account_id: int, limit: int = 50) -> list[dict]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT id, sender, subject, body_text, received_at, is_read FROM emails WHERE account_id = ? ORDER BY id DESC LIMIT ?",
+                (account_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def mark_email_read(self, email_id: int) -> bool:
+        with self.connect() as connection:
+            cursor = connection.execute("UPDATE emails SET is_read = 1 WHERE id = ? AND is_read = 0", (email_id,))
+            return cursor.rowcount == 1
+
+    def unread_email_count(self, account_id: int) -> int:
+        with self.connect() as connection:
+            row = connection.execute("SELECT COUNT(*) FROM emails WHERE account_id = ? AND is_read = 0", (account_id,)).fetchone()
+            return row[0]
+
+    def all_account_emails_by_address(self) -> dict[str, int]:
+        """Return {email_lower: account_id} mapping for all accounts."""
+        with self.connect() as connection:
+            rows = connection.execute("SELECT id, email FROM accounts").fetchall()
+        return {row["email"].lower(): row["id"] for row in rows}

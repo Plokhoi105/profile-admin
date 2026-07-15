@@ -59,6 +59,37 @@ services:
       web:
         condition: service_healthy
 
+  mail:
+    build: .
+    restart: unless-stopped
+    init: true
+    command: ["python", "-m", "admin_panel.mail"]
+    env_file: .env.server
+    environment:
+      ADMIN_DB_PATH: /data/profiles.sqlite3
+      IMAP_HOST: imap.mail.me.com
+      IMAP_USER: alexplokhoi@icloud.com
+      MAIL_CHECK_INTERVAL: "60"
+    volumes:
+      - ./server-data:/data
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; os.getpid()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      web:
+        condition: service_healthy
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped

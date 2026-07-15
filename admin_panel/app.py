@@ -235,6 +235,14 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.send_json({"history": db.ip_history(account_id)})
             return
+        if path.startswith("/api/accounts/") and path.endswith("/emails"):
+            try:
+                account_id = int(path.split("/")[3])
+            except (IndexError, ValueError):
+                self.send_json({"error": "Invalid account id"}, 400)
+                return
+            self.send_json({"emails": db.account_emails(account_id), "unread": db.unread_email_count(account_id)})
+            return
         if path.startswith("/api/jobs/"):
             try:
                 job_id = int(path.rsplit("/", 1)[1])
@@ -272,6 +280,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_rotate_proxy(path, data)
             elif path == "/api/jobs":
                 self._handle_create_job(data)
+            elif path.startswith("/api/emails/") and path.endswith("/read"):
+                self._handle_mark_email_read(path)
             else:
                 self.send_json({"error": "Not found"}, 404)
         except (ValueError, json.JSONDecodeError) as exc:
@@ -471,6 +481,15 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             db.fail_proxy_rotation(account_id, "Proxy change failed")
             raise
+
+    def _handle_mark_email_read(self, path: str) -> None:
+        db = get_db()
+        try:
+            email_id = int(path.split("/")[3])
+        except (IndexError, ValueError) as exc:
+            raise ValueError("Invalid email id") from exc
+        db.mark_email_read(email_id)
+        self.send_json({"ok": True})
 
     def _handle_create_job(self, data: dict) -> None:
         db = get_db()
