@@ -163,8 +163,17 @@
     <textarea id="bybit-cookies-input" rows="10" placeholder="Или вставьте cookies сюда"></textarea>
     <div class="dialog-actions">
       <button type="button" id="cancel-bybit-cookies">Отмена</button>
-      <button type="button" class="primary" id="save-bybit-cookies">Сохранить</button>
+      <button type="button" class="primary" id="save-bybit-cookies">Сохранить и получить адрес</button>
     </div>
+    <div id="bybit-deposit-result" hidden style="margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface-2)">
+      <div style="color:var(--muted);font-size:10px;margin-bottom:6px">АДРЕС ДЕПОЗИТА (USDT · BSC)</div>
+      <div id="bybit-deposit-address" style="font:600 13px/1.4 'SF Mono',Consolas,monospace;color:var(--accent);word-break:break-all;cursor:pointer"></div>
+      <div id="bybit-deposit-tag-row" hidden style="margin-top:10px">
+        <div style="color:var(--muted);font-size:10px;margin-bottom:4px">TAG / MEMO</div>
+        <div id="bybit-deposit-tag" style="font:600 13px/1.4 'SF Mono',Consolas,monospace;color:#f59e0b;cursor:pointer"></div>
+      </div>
+    </div>
+    <div id="bybit-deposit-error" class="message" style="margin-top:8px"></div>
   </div></dialog>
 
   <dialog id="deposit-dialog"><div class="dialog-panel">

@@ -451,7 +451,26 @@ function openBybitCookies(id) {
   state.bybitCookiesAccountId = id;
   $("#bybit-cookies-title").textContent = `Bybit cookies · ${actualName(account)}`;
   $("#bybit-cookies-input").value = "";
+  $("#bybit-deposit-result").hidden = true;
+  $("#bybit-deposit-error").textContent = "";
   $("#bybit-cookies-dialog").showModal();
+  if (account.has_bybit_cookies) {
+    $("#bybit-deposit-error").textContent = "Загрузка адреса...";
+    api(`/api/accounts/${id}/deposit-address`, { method: "POST", body: JSON.stringify({ coin: "USDT", chain: "BSC" }) })
+      .then(data => {
+        if (data.address) {
+          $("#bybit-deposit-address").textContent = data.address;
+          $("#bybit-deposit-address").onclick = () => copyText(data.address, "Адрес скопирован");
+          $("#bybit-deposit-tag").textContent = data.tag || "";
+          $("#bybit-deposit-tag-row").hidden = !data.tag;
+          $("#bybit-deposit-result").hidden = false;
+          $("#bybit-deposit-error").textContent = "";
+        } else {
+          $("#bybit-deposit-error").textContent = "Адрес не найден";
+        }
+      })
+      .catch(err => { $("#bybit-deposit-error").textContent = err.message; });
+  }
 }
 
 function parseNetscapeCookies(text) {
@@ -480,6 +499,11 @@ async function saveBybitCookies() {
   if (!id) return;
   const raw = $("#bybit-cookies-input").value.trim();
   if (!raw) return;
+  const btn = $("#save-bybit-cookies");
+  btn.disabled = true;
+  btn.textContent = "Сохранение...";
+  $("#bybit-deposit-result").hidden = true;
+  $("#bybit-deposit-error").textContent = "";
   try {
     let cookies;
     if (raw.startsWith("[")) {
@@ -490,10 +514,27 @@ async function saveBybitCookies() {
     }
     await api(`/api/accounts/${id}/bybit-cookies`, { method: "POST", body: JSON.stringify({ cookies }) });
     toast(`Cookies сохранены (${cookies.length} шт.)`);
-    $("#bybit-cookies-dialog").close();
     loadAccounts();
+    btn.textContent = "Получаю адрес...";
+    try {
+      const data = await api(`/api/accounts/${id}/deposit-address`, { method: "POST", body: JSON.stringify({ coin: "USDT", chain: "BSC" }) });
+      if (data.address) {
+        $("#bybit-deposit-address").textContent = data.address;
+        $("#bybit-deposit-address").onclick = () => copyText(data.address, "Адрес скопирован");
+        $("#bybit-deposit-tag").textContent = data.tag || "";
+        $("#bybit-deposit-tag-row").hidden = !data.tag;
+        $("#bybit-deposit-result").hidden = false;
+      } else {
+        $("#bybit-deposit-error").textContent = "Адрес не найден";
+      }
+    } catch (err) {
+      $("#bybit-deposit-error").textContent = err.message;
+    }
   } catch (error) {
     toast("Ошибка: " + error.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Сохранить и получить адрес";
   }
 }
 
@@ -509,7 +550,7 @@ function openDepositDialog(id) {
   $("#deposit-result").hidden = true;
   $("#deposit-error").textContent = "";
   $("#deposit-coin").value = "USDT";
-  $("#deposit-chain").value = "TRC20";
+  $("#deposit-chain").value = "BSC";
   $("#deposit-dialog").showModal();
 }
 
@@ -517,7 +558,7 @@ async function getDepositAddress() {
   const id = state.depositAccountId;
   if (!id) return;
   const coin = $("#deposit-coin").value.trim() || "USDT";
-  const chain = $("#deposit-chain").value.trim() || "TRC20";
+  const chain = $("#deposit-chain").value.trim() || "BSC";
   $("#deposit-error").textContent = "";
   $("#deposit-result").hidden = true;
   $("#deposit-fetch-btn").disabled = true;
