@@ -432,6 +432,7 @@ async function markEmailRead(emailId, el) {
 
 $("#close-bybit-cookies").addEventListener("click", () => $("#bybit-cookies-dialog").close());
 $("#cancel-bybit-cookies").addEventListener("click", () => $("#bybit-cookies-dialog").close());
+$("#save-bybit-cookies").addEventListener("click", () => saveBybitCookies());
 $("#bybit-cookies-file-btn").addEventListener("click", () => $("#bybit-cookies-file").click());
 $("#bybit-cookies-file").addEventListener("change", (e) => {
   const file = e.target.files[0];
