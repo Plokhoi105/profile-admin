@@ -562,7 +562,7 @@ def main() -> None:
         except KeyboardInterrupt:
             raise
         except Exception as exc:
-            print(f"Bot polling error: {exc.__class__.__name__}")
+            print(f"Bot polling error: {exc.__class__.__name__}: {exc}")
             time.sleep(2)
 
 
