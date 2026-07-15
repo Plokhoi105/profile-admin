@@ -491,7 +491,7 @@ class Database:
         with self.connect() as connection:
             connection.execute(
                 "UPDATE accounts SET deposit_address = ?, updated_at = ? WHERE id = ?",
-                (address, _now(), account_id),
+                (address, now_iso(), account_id),
             )
 
     def authenticator_codes(self, timestamp: float | None = None) -> list[dict]:
