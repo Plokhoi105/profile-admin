@@ -129,7 +129,7 @@ function render() {
         <button class="delete-vision-one delete-vision-icon" title="Удалить профиль из Vision" aria-label="Удалить ${escapeHtml(actualName(account))} из Vision" ${account.vision_profile_id && !busy ? "" : "disabled"}>${deletingVision ? "…" : "×"}</button>
         <button class="permanent-delete-one permanent-delete-icon" title="Удалить не созданный профиль навсегда" aria-label="Навсегда удалить ${escapeHtml(actualName(account))} из панели" ${!account.vision_profile_id && !busy ? "" : "disabled"}>⌫</button>
       </div></td>
-    </tr>${account.deposit_address ? `<tr class="deposit-subrow" data-id="${account.id}"><td></td><td colspan="3" class="deposit-cell"><span class="deposit-chain">${escapeHtml(account.deposit_chain || "BSC")}</span><button class="inline-copy copy-deposit" type="button" title="Копировать адрес депозита">${escapeHtml(account.deposit_address)}</button></td><td colspan="6"></td></tr>` : ""}`;
+    </tr>${account.deposit_address ? `<tr class="deposit-subrow" data-id="${account.id}"><td colspan="2"></td><td colspan="4" class="deposit-cell"><span class="deposit-chain">${escapeHtml(account.deposit_chain || "BSC")}</span><button class="inline-copy copy-deposit" type="button" title="Копировать адрес депозита">${escapeHtml(account.deposit_address)}</button></td><td colspan="4"></td></tr>` : ""}`;
   }).join("");
   $("#empty").hidden = visible.length > 0;
   $("#summary").textContent = `${state.accounts.length} аккаунтов`;
