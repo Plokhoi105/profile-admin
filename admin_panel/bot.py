@@ -567,6 +567,54 @@ class AdminTelegramBot:
                 page = int(parts[2]) if len(parts) > 2 else 1
                 self.telegram.answer_callback(query_id)
                 self._send_accounts_page(chat_id, f"/accounts {page}", message_id)
+            elif menu_action == "create_all":
+                accounts = self.backend.accounts()
+                not_created = [a for a in accounts if a.get("status") in ("not_created", "ready")]
+                if not not_created:
+                    self.telegram.answer_callback(query_id, "Нет аккаунтов для создания")
+                    return
+                # Group by country+os
+                groups: dict[str, list[int]] = {}
+                for a in not_created:
+                    key = f"{a.get('country', 'mz')}_{a.get('fingerprint_os', 'win')}"
+                    groups.setdefault(key, []).append(a["id"])
+                lines = ["➕ Создать профили?\n"]
+                for key, ids in groups.items():
+                    country, os_type = key.split("_", 1)
+                    lines.append(f"  {country.upper()}/{os_type}: {len(ids)} шт. (#{ids[0]}–#{ids[-1]})")
+                lines.append(f"\nВсего: {len(not_created)}")
+                confirm_markup = {
+                    "inline_keyboard": [
+                        [
+                            {"text": "✅ Создать", "callback_data": "menu:confirm_create_all"},
+                            {"text": "❌ Отмена", "callback_data": "menu:home"},
+                        ]
+                    ]
+                }
+                self.telegram.answer_callback(query_id)
+                if chat_id and message_id:
+                    self.telegram.edit_message(chat_id, message_id, "\n".join(lines))
+                    self.telegram.call("editMessageReplyMarkup", {"chat_id": chat_id, "message_id": message_id, "reply_markup": confirm_markup})
+            elif menu_action == "confirm_create_all":
+                accounts = self.backend.accounts()
+                not_created = [a for a in accounts if a.get("status") in ("not_created", "ready")]
+                if not not_created:
+                    self.telegram.answer_callback(query_id, "Нет аккаунтов для создания")
+                    return
+                groups: dict[str, list[int]] = {}
+                for a in not_created:
+                    key = f"{a.get('country', 'mz')}_{a.get('fingerprint_os', 'win')}"
+                    groups.setdefault(key, []).append(a["id"])
+                job_ids = []
+                for key, ids in groups.items():
+                    country, os_type = key.split("_", 1)
+                    cmd = CreateCommand(country, os_type, ids)
+                    job_id = self.backend.create_job(cmd)
+                    job_ids.append(job_id)
+                self.telegram.answer_callback(query_id, "Запущено ✓")
+                if chat_id and message_id:
+                    jobs_text = ", ".join(f"#{jid}" for jid in job_ids)
+                    self.telegram.edit_message(chat_id, message_id, f"🚀 Запущено {len(not_created)} профилей\nЗадачи: {jobs_text}")
             elif menu_action == "refresh":
                 self.telegram.answer_callback(query_id, "Обновлено ✓")
                 content = format_status(self.backend.accounts())
@@ -607,6 +655,7 @@ def main_keyboard() -> dict[str, Any]:
                 {"text": "📋 Аккаунты", "callback_data": "menu:accounts:1"},
             ],
             [
+                {"text": "➕ Создать все", "callback_data": "menu:create_all"},
                 {"text": "🔄 Обновить", "callback_data": "menu:refresh"},
             ],
         ]
