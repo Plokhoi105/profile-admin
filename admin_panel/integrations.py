@@ -700,7 +700,7 @@ class ProfileCreator:
         return str(profile_id)
 
 
-def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", chain: str = "TRC20") -> dict:
+def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", chain: str = "BSC") -> dict:
     """Fetch Bybit deposit address using session cookies through SOCKS5 proxy."""
     cookie_list = json.loads(cookies_json) if isinstance(cookies_json, str) else cookies_json
     if not isinstance(cookie_list, list):
