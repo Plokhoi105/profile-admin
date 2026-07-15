@@ -626,9 +626,19 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": "Proxy not found in Vision"}, 400)
             return
         proxy_data = creator._normalize_raw_proxy(proxy)
+        user_agent = ""
+        profile_id = str(account.get("vision_profile_id") or "")
+        if profile_id:
+            try:
+                profile = creator.get_vision_profile(profile_id)
+                fp = profile.get("fingerprint") or {}
+                nav = fp.get("navigator") or {}
+                user_agent = str(nav.get("userAgent") or "")
+            except Exception:
+                pass
         coin = str(data.get("coin", "USDT"))
         chain = str(data.get("chain", "BSC"))
-        result = bybit_deposit_address(cookies_json, proxy_data, coin, chain)
+        result = bybit_deposit_address(cookies_json, proxy_data, coin, chain, user_agent=user_agent)
         if result.get("address"):
             db.set_deposit_address(account_id, result["address"], chain)
         self.send_json(result)

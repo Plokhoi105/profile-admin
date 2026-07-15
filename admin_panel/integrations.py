@@ -700,7 +700,7 @@ class ProfileCreator:
         return str(profile_id)
 
 
-def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", chain: str = "BSC") -> dict:
+def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", chain: str = "BSC", user_agent: str = "") -> dict:
     """Fetch Bybit deposit address using session cookies through SOCKS5 proxy."""
     cookie_list = json.loads(cookies_json) if isinstance(cookies_json, str) else cookies_json
     if not isinstance(cookie_list, list):
@@ -717,6 +717,7 @@ def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", ch
 
     host = "www.bybit.com"
     path = f"/x-api/v3/private/cht/asset-deposit/deposit/address-chain?coin={urllib.parse.quote(coin)}&chain={urllib.parse.quote(chain)}"
+    ua = user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
 
     connection = socks5_connect(proxy, host, 443)
     try:
@@ -729,7 +730,7 @@ def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", ch
                 f"Accept: application/json, text/plain, */*\r\n"
                 f"Accept-Language: en-US,en;q=0.9\r\n"
                 f"Accept-Encoding: identity\r\n"
-                f"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36\r\n"
+                f"User-Agent: {ua}\r\n"
                 f"Sec-Ch-Ua: \"Google Chrome\";v=\"137\", \"Chromium\";v=\"137\", \"Not/A)Brand\";v=\"24\"\r\n"
                 f"Sec-Ch-Ua-Mobile: ?0\r\n"
                 f"Sec-Ch-Ua-Platform: \"Windows\"\r\n"
