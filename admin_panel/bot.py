@@ -270,12 +270,11 @@ class BackendClient:
         )
         return int(data["job_id"])
 
-    def import_text(self, command: ImportCommand, text: str) -> dict[str, Any]:
-        return self.request(
-            "POST",
-            "/api/import",
-            {"text": text, "default_country": command.country, "default_os": command.fingerprint_os},
-        )
+    def import_text(self, command: ImportCommand, text: str, prefix: str = "") -> dict[str, Any]:
+        payload: dict[str, Any] = {"text": text, "default_country": command.country, "default_os": command.fingerprint_os}
+        if prefix:
+            payload["prefix"] = prefix
+        return self.request("POST", "/api/import", payload)
 
 
 class TelegramClient:
@@ -382,7 +381,14 @@ class AdminTelegramBot:
             elif command == "/import":
                 self.handle_import(chat_id, text, message)
             else:
-                self.telegram.send_message(chat_id, "Unknown command. Use /start.")
+                # Check if user is awaiting custom prefix input
+                if self._try_custom_prefix(chat_id, user_id, text):
+                    return
+                # Check if text contains emails
+                if self._looks_like_emails(text):
+                    self._ask_prefix_for_import(chat_id, user_id, text)
+                else:
+                    self.telegram.send_message(chat_id, "Unknown command. Use /start.")
         except CommandError as exc:
             self.telegram.send_message(chat_id, str(exc))
         except BotError as exc:
@@ -519,6 +525,11 @@ class AdminTelegramBot:
             self._handle_menu_callback(query_id, chat_id, message_id, data)
             return
 
+        # Quick import
+        if data.startswith("qimport:"):
+            self._handle_quick_import_callback(query_id, chat_id, message_id, user_id, data)
+            return
+
         action, separator, token = data.partition(":")
         if separator != ":" or action not in {"confirm", "cancel"}:
             self.telegram.answer_callback(query_id, "Expired.")
@@ -547,6 +558,112 @@ class AdminTelegramBot:
             self.telegram.answer_callback(query_id, "Error.")
             if chat_id:
                 self.telegram.send_message(chat_id, f"Error: {exc}")
+
+    @staticmethod
+    def _looks_like_emails(text: str) -> bool:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if not lines:
+            return False
+        email_count = sum(1 for line in lines if "@" in line.split(":")[0] and "." in line.split(":")[0])
+        return email_count > 0 and email_count >= len(lines) * 0.5
+
+    def _try_custom_prefix(self, chat_id: int, user_id: int, text: str) -> bool:
+        # Check all pending items for this user's await_prefix_token
+        to_remove = []
+        email_text = None
+        for token, item in list(self.pending._items.items()):
+            if item.user_id == user_id and item.action == "await_prefix_token" and item.expires_at >= time.monotonic():
+                email_text = item.payload["text"]
+                to_remove.append(token)
+                # Also clean up the await_prefix entry
+                inner_token = item.payload.get("token", "")
+                if inner_token in self.pending._items:
+                    to_remove.append(inner_token)
+                break
+        if email_text is None:
+            return False
+        for t in to_remove:
+            self.pending._items.pop(t, None)
+        prefix = text.strip()
+        if not prefix or len(prefix) > 60:
+            self.telegram.send_message(chat_id, "❌ Префикс должен быть от 1 до 60 символов.")
+            return True
+        try:
+            cmd = ImportCommand(country="", fingerprint_os="win")
+            result = self.backend.import_text(cmd, email_text, prefix=prefix)
+            added = result.get("added", 0)
+            dupes = len(result.get("duplicates", []))
+            errors = len(result.get("invalid", []))
+            msg = f"✅ Импортировано: {added}"
+            if dupes:
+                msg += f", дубликаты: {dupes}"
+            if errors:
+                msg += f", ошибки: {errors}"
+            msg += f"\nПрефикс: {prefix}"
+            self.telegram.send_message(chat_id, msg)
+        except BotError as exc:
+            self.telegram.send_message(chat_id, f"❌ Ошибка: {exc}")
+        return True
+
+    def _ask_prefix_for_import(self, chat_id: int, user_id: int, email_text: str) -> None:
+        lines = [line.strip() for line in email_text.splitlines() if line.strip()]
+        count = sum(1 for line in lines if "@" in line)
+        token = self.pending.add(user_id, "quick_import", {"text": email_text})
+        markup = {
+            "inline_keyboard": [
+                [{"text": "newTry", "callback_data": f"qimport:{token}:newTry"}],
+                [{"text": "batch", "callback_data": f"qimport:{token}:batch"}],
+                [{"text": "acc", "callback_data": f"qimport:{token}:acc"}],
+                [{"text": "✏️ Свой префикс", "callback_data": f"qimport:{token}:custom"}],
+                [{"text": "❌ Отмена", "callback_data": f"cancel:{token}"}],
+            ]
+        }
+        self.telegram.send_message(
+            chat_id,
+            f"📧 Найдено {count} email(ов). Выбери префикс для имён профилей:",
+            markup,
+        )
+
+    def _handle_quick_import_callback(self, query_id: str, chat_id: int, message_id: int, user_id: int, data: str) -> None:
+        # format: qimport:TOKEN:PREFIX
+        parts = data.split(":", 2)
+        if len(parts) < 3:
+            self.telegram.answer_callback(query_id, "Ошибка")
+            return
+        token = parts[1]
+        prefix = parts[2]
+        item = self.pending.pop(token, user_id)
+        if item is None or item.action != "quick_import":
+            self.telegram.answer_callback(query_id, "Истекло. Отправь email'ы заново.")
+            return
+        if prefix == "custom":
+            # Re-add pending with new action to wait for text reply
+            new_token = self.pending.add(user_id, "await_prefix", {"text": item.payload["text"]})
+            self.telegram.answer_callback(query_id)
+            if chat_id and message_id:
+                self.telegram.edit_message(chat_id, message_id, "✏️ Напиши префикс для профилей:")
+            # Store token in a way we can find it - use user_id mapping
+            self.pending.add(user_id, "await_prefix_token", {"token": new_token, "text": item.payload["text"]})
+            return
+        # Do the import
+        self.telegram.answer_callback(query_id, "Импортирую...")
+        try:
+            cmd = ImportCommand(country="", fingerprint_os="win")
+            result = self.backend.import_text(cmd, item.payload["text"], prefix=prefix)
+            added = result.get("added", 0)
+            dupes = len(result.get("duplicates", []))
+            errors = len(result.get("invalid", []))
+            msg = f"✅ Импортировано: {added}"
+            if dupes:
+                msg += f", дубликаты: {dupes}"
+            if errors:
+                msg += f", ошибки: {errors}"
+            msg += f"\nПрефикс: {prefix}"
+            if chat_id and message_id:
+                self.telegram.edit_message(chat_id, message_id, msg)
+        except BotError as exc:
+            if chat_id and message_id:
+                self.telegram.edit_message(chat_id, message_id, f"❌ Ошибка: {exc}")
 
     def _handle_menu_callback(self, query_id: str, chat_id: int, message_id: int, data: str) -> None:
         parts = data.split(":")
