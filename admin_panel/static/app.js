@@ -102,7 +102,7 @@ function render() {
     return `<tr data-id="${account.id}" title="${escapeHtml(account.error || "")}">
       <td><input class="row-select" type="checkbox" aria-label="Выбрать ${escapeHtml(actualName(account))}" ${state.selected.has(account.id) ? "checked" : ""}></td>
       <td><div class="profile-cell"><div><button class="profile-copy" type="button" title="Копировать email и код" aria-label="Копировать email и код профиля ${escapeHtml(actualName(account))}"><strong>${escapeHtml(actualName(account))}</strong></button></div><button class="edit-account icon-small" title="Редактировать" aria-label="Редактировать">✎</button></div></td>
-      <td class="email-cell"><div class="email-row"><button class="inline-copy copy-email" type="button" title="Копировать email" aria-label="Копировать email ${escapeHtml(account.email)}">${escapeHtml(account.email)}</button><button class="emails-btn" type="button" title="Входящие письма" aria-label="Входящие письма">✉${account.unread_emails ? `<span class="unread-badge">${account.unread_emails}</span>` : ""}</button></div>${account.deposit_address ? `<div class="deposit-row"><span class="deposit-chain">${escapeHtml(account.deposit_chain || "BSC")}</span><button class="inline-copy copy-deposit" type="button" title="Копировать адрес депозита">${escapeHtml(account.deposit_address)}</button></div>` : ""}</td>
+      <td class="email-cell"><button class="inline-copy copy-email" type="button" title="Копировать email" aria-label="Копировать email ${escapeHtml(account.email)}">${escapeHtml(account.email)}</button><button class="emails-btn" type="button" title="Входящие письма" aria-label="Входящие письма">✉${account.unread_emails ? `<span class="unread-badge">${account.unread_emails}</span>` : ""}</button></td>
       <td class="code-value${state.codesHidden ? " is-hidden" : ""}">${account.code ? `<button class="inline-copy copy-code" type="button" title="Копировать код" aria-label="Копировать код профиля ${escapeHtml(actualName(account))}">${escapeHtml(state.codesHidden ? "••••••" : account.code)}</button>` : "—"}</td>
       <td class="totp-cell" data-totp-id="${account.id}">${account.has_authenticator
         ? `<div class="totp-value"><strong>${escapeHtml(totp?.code || "------")}</strong><small>${totp ? `${totp.remaining}с` : ""}</small></div><div class="totp-actions"><button class="copy-totp" ${totp ? "" : "disabled"}>Копировать</button><button class="setup-authenticator">Изменить</button></div>`
@@ -129,7 +129,7 @@ function render() {
         <button class="delete-vision-one delete-vision-icon" title="Удалить профиль из Vision" aria-label="Удалить ${escapeHtml(actualName(account))} из Vision" ${account.vision_profile_id && !busy ? "" : "disabled"}>${deletingVision ? "…" : "×"}</button>
         <button class="permanent-delete-one permanent-delete-icon" title="Удалить не созданный профиль навсегда" aria-label="Навсегда удалить ${escapeHtml(actualName(account))} из панели" ${!account.vision_profile_id && !busy ? "" : "disabled"}>⌫</button>
       </div></td>
-    </tr>`;
+    </tr>${account.deposit_address ? `<tr class="deposit-subrow" data-id="${account.id}"><td></td><td colspan="3" class="deposit-cell"><span class="deposit-chain">${escapeHtml(account.deposit_chain || "BSC")}</span><button class="inline-copy copy-deposit" type="button" title="Копировать адрес депозита">${escapeHtml(account.deposit_address)}</button></td><td colspan="6"></td></tr>` : ""}`;
   }).join("");
   $("#empty").hidden = visible.length > 0;
   $("#summary").textContent = `${state.accounts.length} аккаунтов`;
