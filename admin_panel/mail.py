@@ -5,15 +5,16 @@ import email
 import email.header
 import email.utils
 import imaplib
+import logging
 import os
 import re
 import time
-import traceback
 from email.message import Message
 from pathlib import Path
-from typing import Any
 
 from admin_panel.core import Database, now_iso
+
+logger = logging.getLogger("admin_panel.mail")
 
 
 def decode_header_value(raw: str) -> str:
@@ -146,7 +147,7 @@ class MailChecker:
 
             # Search for emails from last 24 hours
             since = time.strftime("%d-%b-%Y", time.gmtime(time.time() - 86400))
-            status, data = conn.search(None, f'(SINCE {since})')
+            status, data = conn.search(None, "SINCE", since)
             if status != "OK" or not data[0]:
                 return 0
 
@@ -198,7 +199,7 @@ class MailChecker:
                                 stored += 1
                             break
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Failed to process message %s", msg_id)
                     continue
         finally:
             try:
@@ -209,19 +210,20 @@ class MailChecker:
 
     def run_forever(self) -> None:
         """Run mail checking loop."""
-        print(f"Mail checker started: {self.imap_user}@{self.imap_host}, interval={self.interval}s", flush=True)
+        logger.info("Mail checker started: %s, interval=%ds", self.imap_host, self.interval)
         while True:
             try:
                 count = self.check_once()
                 if count:
-                    print(f"Mail checker: stored {count} new email(s)", flush=True)
-            except Exception as exc:
-                print(f"Mail checker error: {exc.__class__.__name__}: {exc}", flush=True)
+                    logger.info("Mail checker: stored %d new email(s)", count)
+            except Exception:
+                logger.exception("Mail checker error")
             time.sleep(self.interval)
 
 
 def main() -> None:
     """Entry point for mail checker service."""
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     db_path = Path(os.environ.get("ADMIN_DB_PATH", "profiles.sqlite3"))
     imap_host = os.environ.get("IMAP_HOST", "imap.mail.me.com")
     imap_user = os.environ.get("IMAP_USER", "")
@@ -229,7 +231,7 @@ def main() -> None:
     interval = int(os.environ.get("MAIL_CHECK_INTERVAL", "60"))
 
     if not imap_user or not imap_pass:
-        print("IMAP_USER and IMAP_PASS must be set", flush=True)
+        logger.error("IMAP_USER and IMAP_PASS must be set")
         return
 
     db = Database(db_path)

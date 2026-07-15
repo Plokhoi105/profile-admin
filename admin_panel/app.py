@@ -143,7 +143,7 @@ class Handler(BaseHTTPRequestHandler):
     def authorize(self, path: str) -> bool:
         if path == "/healthz":
             return True
-        if basic_auth_matches(self.headers.get("Authorization", ""), ADMIN_USER, ADMIN_PASSWORD):
+        if basic_auth_matches(self.headers.get("Authorization", ""), ADMIN_USER, ADMIN_PASSWORD, allow_anonymous=not REQUIRE_AUTH):
             return True
         # Telegram Mini App initData auth
         tg_init_data = self.headers.get("X-Telegram-Init-Data", "")
@@ -151,9 +151,7 @@ class Handler(BaseHTTPRequestHandler):
             user = verify_telegram_init_data(tg_init_data, TELEGRAM_BOT_TOKEN)
             if user is not None:
                 user_id = user.get("id")
-                if isinstance(user_id, int) and (
-                    not TELEGRAM_ALLOWED_USER_IDS or user_id in TELEGRAM_ALLOWED_USER_IDS
-                ):
+                if isinstance(user_id, int) and TELEGRAM_ALLOWED_USER_IDS and user_id in TELEGRAM_ALLOWED_USER_IDS:
                     return True
         body = b"Authentication required"
         self.send_response(HTTPStatus.UNAUTHORIZED)
@@ -172,13 +170,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'; base-uri 'none'")
 
     def reject_cross_site(self) -> bool:
-        if self.headers.get("Sec-Fetch-Site", "").casefold() != "cross-site":
-            return False
         # Allow cross-site requests authenticated via Telegram initData
         if self.headers.get("X-Telegram-Init-Data", ""):
             return False
-        self.send_json({"error": "Cross-site requests are not allowed"}, HTTPStatus.FORBIDDEN)
-        return True
+        fetch_site = self.headers.get("Sec-Fetch-Site", "")
+        if fetch_site and fetch_site.casefold() not in {"same-origin", "same-site", "none"}:
+            self.send_json({"error": "Cross-site requests are not allowed"}, HTTPStatus.FORBIDDEN)
+            return True
+        return False
 
     def send_json(self, payload: object, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -373,8 +372,9 @@ class Handler(BaseHTTPRequestHandler):
         creator = ProfileCreator(ROOT)
         creator.validate_vision()
         vision_profiles = creator.list_vision_profiles()
-        existing_emails = {a["email"].lower() for a in db.list_accounts()}
-        existing_profile_ids = {a["vision_profile_id"] for a in db.list_accounts() if a["vision_profile_id"]}
+        all_accounts = db.list_accounts()
+        existing_emails = {a["email"].lower() for a in all_accounts}
+        existing_profile_ids = {a["vision_profile_id"] for a in all_accounts if a["vision_profile_id"]}
         imported = 0
         skipped = 0
         errors_list: list[str] = []
@@ -394,8 +394,7 @@ class Handler(BaseHTTPRequestHandler):
                 continue
             if email_addr in existing_emails:
                 # Link existing account to this Vision profile
-                accounts = db.list_accounts()
-                for acc in accounts:
+                for acc in all_accounts:
                     if acc["email"].lower() == email_addr and not acc["vision_profile_id"]:
                         proxy = vp.get("proxy") if isinstance(vp.get("proxy"), dict) else None
                         proxy_id = str(vp.get("proxy_id") or (proxy or {}).get("id") or "")
@@ -571,7 +570,7 @@ class Handler(BaseHTTPRequestHandler):
             db.fail_proxy_rotation(account_id, str(exc))
             self.send_json({"error": str(exc), "warning": True}, HTTPStatus.UNPROCESSABLE_ENTITY)
         except Exception as exc:
-            db.fail_proxy_rotation(account_id, "Proxy change failed")
+            db.fail_proxy_rotation(account_id, f"Proxy change failed: {exc}")
             raise
 
     def _handle_mark_email_read(self, path: str) -> None:
@@ -625,7 +624,7 @@ class Handler(BaseHTTPRequestHandler):
         if not proxy:
             self.send_json({"error": "Proxy not found in Vision"}, 400)
             return
-        proxy_data = creator._normalize_raw_proxy(proxy)
+        proxy_data = creator.normalize_raw_proxy(proxy)
         user_agent = ""
         profile_id = str(account.get("vision_profile_id") or "")
         if profile_id:
@@ -753,6 +752,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def serve_static(self, path: str) -> None:
         relative = "index.html" if path in {"", "/"} else path.lstrip("/")
+        if ".." in Path(relative).parts:
+            self.send_error(404)
+            return
         candidate = (STATIC / relative).resolve()
         if STATIC.resolve() not in candidate.parents and candidate != STATIC.resolve():
             self.send_error(404)
@@ -763,7 +765,8 @@ class Handler(BaseHTTPRequestHandler):
         body = candidate.read_bytes()
         content_type = mimetypes.guess_type(candidate.name)[0] or "application/octet-stream"
         self.send_response(200)
-        self.send_header("Content-Type", f"{content_type}; charset=utf-8")
+        ct_header = f"{content_type}; charset=utf-8" if content_type.startswith("text/") else content_type
+        self.send_header("Content-Type", ct_header)
         self.send_security_headers()
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()

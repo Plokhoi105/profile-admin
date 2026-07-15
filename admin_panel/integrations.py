@@ -131,7 +131,28 @@ def receive_exact(connection: socket.socket, length: int) -> bytes:
     return b"".join(chunks)
 
 
+def _validate_proxy_host(host: str) -> None:
+    """Block connections to internal/loopback addresses to prevent SSRF."""
+    try:
+        addr = ipaddress.ip_address(host)
+        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+            raise ValueError(f"Proxy host {host} is a private/internal address")
+    except ValueError as exc:
+        if "is a private" in str(exc) or "is a" in str(exc):
+            raise
+        # Not a valid IP — it's a hostname, resolve and check
+        try:
+            resolved = socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            for _family, _type, _proto, _canonname, sockaddr in resolved:
+                addr = ipaddress.ip_address(sockaddr[0])
+                if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+                    raise ValueError(f"Proxy host {host} resolves to private address {addr}")
+        except socket.gaierror:
+            pass  # Can't resolve — let connection fail naturally
+
+
 def socks5_connect(proxy: dict, target_host: str, target_port: int) -> socket.socket:
+    _validate_proxy_host(str(proxy["host"]))
     connection = socket.create_connection((str(proxy["host"]), int(proxy["port"])), timeout=20)
     try:
         connection.settimeout(20)
@@ -569,7 +590,7 @@ class ProfileCreator:
         }
 
     @staticmethod
-    def _normalize_raw_proxy(proxy: dict) -> dict:
+    def normalize_raw_proxy(proxy: dict) -> dict:
         return {
             "host": proxy.get("proxy_ip") or proxy.get("host"),
             "port": proxy.get("proxy_port") or proxy.get("port"),
@@ -580,12 +601,12 @@ class ProfileCreator:
     def check_candidate_proxy(self, proxy: dict) -> dict:
         if not self.scamalytics_user or not self.scamalytics_key:
             raise RuntimeError("Scamalytics credentials are missing")
-        normalized = self._normalize_raw_proxy(proxy)
+        normalized = self.normalize_raw_proxy(proxy)
         exit_ip = resolve_proxy_exit_ip(normalized)
         return scamalytics_lookup(self.scamalytics_user, self.scamalytics_key, exit_ip)
 
     def confirm_candidate_proxy(self, proxy: dict, expected_ip: str) -> None:
-        normalized = self._normalize_raw_proxy(proxy)
+        normalized = self.normalize_raw_proxy(proxy)
         last_error: Exception | None = None
         for check in range(2):
             try:
@@ -700,15 +721,30 @@ class ProfileCreator:
         return str(profile_id)
 
 
+ALLOWED_COINS = {"USDT", "BTC", "ETH", "USDC"}
+ALLOWED_CHAINS = {"BSC", "ETH", "TRX", "SOL", "ARBI", "OPTI", "MATIC", "AVAXC", "TON"}
+
+
+def _sanitize_header_value(value: str) -> str:
+    """Strip CRLF characters to prevent HTTP header injection."""
+    return value.replace("\r", "").replace("\n", "")
+
+
 def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", chain: str = "BSC", user_agent: str = "") -> dict:
     """Fetch Bybit deposit address using session cookies through SOCKS5 proxy."""
+    if coin not in ALLOWED_COINS:
+        raise ValueError(f"Unsupported coin: {coin}")
+    if chain not in ALLOWED_CHAINS:
+        raise ValueError(f"Unsupported chain: {chain}")
+
     cookie_list = json.loads(cookies_json) if isinstance(cookies_json, str) else cookies_json
     if not isinstance(cookie_list, list):
         raise ValueError("Cookies must be a JSON array")
 
-    # Filter to bybit.com cookies only and build cookie header
+    # Filter to bybit.com cookies only, sanitize values to prevent header injection
     cookie_header = "; ".join(
-        f"{c['name']}={c['value']}" for c in cookie_list
+        f"{_sanitize_header_value(str(c['name']))}={_sanitize_header_value(str(c['value']))}"
+        for c in cookie_list
         if isinstance(c, dict) and "name" in c and "value" in c
         and "bybit" in str(c.get("domain", "")).lower()
     )
@@ -717,7 +753,7 @@ def bybit_deposit_address(cookies_json: str, proxy: dict, coin: str = "USDT", ch
 
     host = "www.bybit.com"
     path = f"/x-api/v3/private/cht/asset-deposit/deposit/address-chain?coin={urllib.parse.quote(coin)}&chain={urllib.parse.quote(chain)}"
-    ua = user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
+    ua = _sanitize_header_value(user_agent) if user_agent else "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
 
     connection = socks5_connect(proxy, host, 443)
     try:

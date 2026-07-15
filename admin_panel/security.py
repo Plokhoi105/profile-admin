@@ -5,9 +5,9 @@ import binascii
 import secrets
 
 
-def basic_auth_matches(header: str, username: str, password: str) -> bool:
+def basic_auth_matches(header: str, username: str, password: str, *, allow_anonymous: bool = False) -> bool:
     if not username and not password:
-        return True
+        return allow_anonymous
     if not username or not password or not header.startswith("Basic "):
         return False
     try:

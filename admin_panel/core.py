@@ -231,6 +231,23 @@ class Database:
         finally:
             connection.close()
 
+    @contextmanager
+    def connect_immediate(self) -> Iterator[sqlite3.Connection]:
+        """Connection with explicit BEGIN IMMEDIATE for write-heavy critical sections."""
+        connection = sqlite3.connect(self.path, timeout=30, isolation_level=None)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            yield connection
+            connection.execute("COMMIT")
+        except Exception:
+            connection.execute("ROLLBACK")
+            raise
+        finally:
+            connection.close()
+
     def initialize(self) -> None:
         with self.connect() as connection:
             connection.executescript(
@@ -663,8 +680,7 @@ class Database:
         return self.public_account(restored) if restored else None
 
     def permanently_delete_uncreated_account(self, account_id: int) -> bool:
-        with self.connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
+        with self.connect_immediate() as connection:
             row = connection.execute(
                 "SELECT status, vision_profile_id FROM accounts WHERE id = ?", (account_id,)
             ).fetchone()
@@ -695,8 +711,7 @@ class Database:
         timestamp = now_iso()
         unique_ids = list(dict.fromkeys(int(value) for value in account_ids))
         placeholders = ",".join("?" for _ in unique_ids)
-        with self.connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
+        with self.connect_immediate() as connection:
             rows = connection.execute(
                 f"SELECT id, profile_name, code, country, status FROM accounts WHERE id IN ({placeholders})",
                 unique_ids,
@@ -786,8 +801,7 @@ class Database:
         return [dict(row) for row in rows]
 
     def claim_next_job(self) -> int | None:
-        with self.connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
+        with self.connect_immediate() as connection:
             row = connection.execute(
                 "SELECT id FROM jobs WHERE status = 'queued' ORDER BY id LIMIT 1"
             ).fetchone()
@@ -903,8 +917,7 @@ class Database:
         return cursor.rowcount == 1
 
     def begin_proxy_rotation(self, account_id: int) -> bool:
-        with self.connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
+        with self.connect_immediate() as connection:
             active = connection.execute(
                 """
                 SELECT COUNT(*) FROM job_accounts
@@ -932,8 +945,7 @@ class Database:
             )
 
     def begin_account_delete(self, account_id: int) -> str | None:
-        with self.connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
+        with self.connect_immediate() as connection:
             row = connection.execute("SELECT status FROM accounts WHERE id = ?", (account_id,)).fetchone()
             if not row or row["status"] in {"queued", "running", "rotating", "deleting"}:
                 return None
