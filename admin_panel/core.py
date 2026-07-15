@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, urlparse
 EMAIL_RE = re.compile(r"^[^\s@,:]+@[^\s@,:]+\.[^\s@,:]+$")
 LABEL_RE = re.compile(r"^(newTry\[(\d+)\])\s+", re.IGNORECASE)
 PROFILE_NAME_RE = re.compile(r"newTry\[(\d+)]", re.IGNORECASE)
+PREFIX_INDEX_RE = re.compile(r"^(.+?)\[(\d+)]$")
 AUTO_CODE_START_INDEX = 51
 AUTO_CODE_LENGTH = 10
 
@@ -317,13 +318,13 @@ class Database:
                     )
                     connection.execute("DELETE FROM accounts WHERE id = ?", (snapshot["id"],))
 
-    def next_profile_index(self, connection: sqlite3.Connection) -> int:
+    def next_profile_index(self, connection: sqlite3.Connection, prefix: str = "newTry") -> int:
         rows = connection.execute("SELECT profile_name FROM accounts").fetchall()
         values = []
         for row in rows:
-            index = profile_index(row["profile_name"])
-            if index is not None:
-                values.append(index)
+            match = PREFIX_INDEX_RE.match(row["profile_name"])
+            if match and match.group(1).casefold() == prefix.casefold():
+                values.append(int(match.group(2)))
         return max(values, default=0) + 1
 
     def import_accounts(self, accounts: Iterable[ImportedAccount], prefix: str = "") -> dict:
@@ -331,7 +332,7 @@ class Database:
         duplicates: list[str] = []
         name_prefix = prefix if prefix else "newTry"
         with self.connect() as connection:
-            next_index = self.next_profile_index(connection)
+            next_index = self.next_profile_index(connection, name_prefix)
             for account in accounts:
                 existing = connection.execute("SELECT id FROM accounts WHERE email = ?", (account.email,)).fetchone()
                 if existing:
