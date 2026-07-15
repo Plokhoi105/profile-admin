@@ -630,7 +630,7 @@ class Handler(BaseHTTPRequestHandler):
         chain = str(data.get("chain", "BSC"))
         result = bybit_deposit_address(cookies_json, proxy_data, coin, chain)
         if result.get("address"):
-            db.set_deposit_address(account_id, result["address"])
+            db.set_deposit_address(account_id, result["address"], chain)
         self.send_json(result)
 
     def _handle_create_job(self, data: dict) -> None:
