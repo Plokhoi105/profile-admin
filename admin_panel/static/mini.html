@@ -202,6 +202,36 @@
     color: var(--text-dim);
     flex-shrink: 0;
   }
+  .account-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .act-btn {
+    flex: 1;
+    min-height: 34px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-input);
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .act-btn:active { transform: scale(0.95); }
+  .act-btn:disabled { opacity: 0.3; }
+  .act-btn.act-create { color: var(--accent); border-color: rgba(0,212,170,0.3); }
+  .act-btn.act-sync { color: #8b5cf6; border-color: rgba(139,92,246,0.3); }
+  .act-btn.act-fraud { color: var(--warning); border-color: rgba(210,153,34,0.3); }
+  .act-btn.act-proxy { color: #3b82f6; border-color: rgba(59,130,246,0.3); }
+  .act-btn.act-delete { color: var(--danger); border-color: rgba(248,81,73,0.3); }
 
   /* Bottom nav */
   .bottom-nav {
@@ -520,13 +550,32 @@ function renderAccounts() {
     const statusClass = ['queued', 'running'].includes(a.status) ? a.status :
                         (a.status || 'not_created');
     const countryFlag = a.country ? a.country.toUpperCase() : '';
-    return '<div class="account-item">' +
+    const isCreated = a.status === 'created';
+    const isNotCreated = a.status === 'not_created' || a.status === 'ready';
+    const isPending = a.status === 'pending_sync';
+    const isBusy = ['queued','running','rotating','deleting'].includes(a.status);
+    let actions = '';
+    if (isNotCreated) {
+      actions = '<div class="account-actions">' +
+        '<button class="act-btn act-create" onclick="createOne(' + a.id + ',this)">➕ Создать</button>' +
+        '<button class="act-btn act-delete" onclick="deleteOne(' + a.id + ',this)">🗑</button>' +
+      '</div>';
+    } else if (isCreated || isPending) {
+      actions = '<div class="account-actions">' +
+        '<button class="act-btn act-sync" onclick="syncOne(' + a.id + ',this)">↻ Синхр</button>' +
+        '<button class="act-btn act-fraud" onclick="fraudCheck(' + a.id + ',this)">⬥ Fraud</button>' +
+        '<button class="act-btn act-proxy" onclick="rotateProxy(' + a.id + ',this)">⟳ Прокси</button>' +
+      '</div>';
+    }
+    return '<div class="account-item" style="flex-wrap:wrap">' +
       '<div class="account-status ' + statusClass + '"></div>' +
       '<div class="account-info">' +
         '<div class="account-name">' + escapeHtml(a.profile_name || a.email) + '</div>' +
-        '<div class="account-meta">' + escapeHtml(a.status || 'not_created') + '</div>' +
+        '<div class="account-meta">' + escapeHtml(a.status || 'not_created') +
+          (a.fraud_score >= 0 ? ' · fraud: ' + a.fraud_score : '') + '</div>' +
       '</div>' +
       '<div class="account-country">' + escapeHtml(countryFlag) + '</div>' +
+      actions +
     '</div>';
   }).join('');
 }
@@ -626,6 +675,74 @@ function syncProfiles() {
     btn.disabled = false;
     btn.textContent = 'Sync with Vision';
   });
+}
+
+function createOne(id, btn) {
+  btn.disabled = true;
+  api('POST', '/api/jobs', { account_ids: [id] }).then(data => {
+    toast('Задача #' + data.job_id + ' запущена', 'success');
+    setTimeout(loadAccounts, 2000);
+  }).catch(e => toast(e.error || 'Ошибка', 'error'))
+    .finally(() => { btn.disabled = false; });
+}
+
+function syncOne(id, btn) {
+  btn.disabled = true;
+  api('POST', '/api/sync', { account_ids: [id] }).then(() => {
+    toast('Синхронизировано', 'success');
+    loadAccounts();
+  }).catch(e => toast(e.error || 'Ошибка', 'error'))
+    .finally(() => { btn.disabled = false; });
+}
+
+function fraudCheck(id, btn) {
+  btn.disabled = true;
+  api('POST', '/api/accounts/' + id + '/fraud-check', {}).then(data => {
+    const a = data.account || {};
+    toast('Fraud score: ' + (a.fraud_score ?? '?'), 'success');
+    loadAccounts();
+  }).catch(e => toast(e.error || 'Ошибка', 'error'))
+    .finally(() => { btn.disabled = false; });
+}
+
+function rotateProxy(id, btn) {
+  if (tg && tg.showConfirm) {
+    tg.showConfirm('Заменить прокси?', function(ok) {
+      if (ok) doRotateProxy(id, btn);
+    });
+  } else if (confirm('Заменить прокси?')) {
+    doRotateProxy(id, btn);
+  }
+}
+
+function doRotateProxy(id, btn) {
+  btn.disabled = true;
+  const account = allAccounts.find(a => a.id === id);
+  const country = account ? account.country : '';
+  api('POST', '/api/accounts/' + id + '/rotate-proxy', { country: country }).then(() => {
+    toast('Прокси заменён', 'success');
+    loadAccounts();
+  }).catch(e => toast(e.error || 'Ошибка', 'error'))
+    .finally(() => { btn.disabled = false; });
+}
+
+function deleteOne(id, btn) {
+  if (tg && tg.showConfirm) {
+    tg.showConfirm('Удалить запись навсегда?', function(ok) {
+      if (ok) doDelete(id, btn);
+    });
+  } else if (confirm('Удалить запись навсегда?')) {
+    doDelete(id, btn);
+  }
+}
+
+function doDelete(id, btn) {
+  btn.disabled = true;
+  api('POST', '/api/accounts/' + id + '/permanent-delete', {}).then(() => {
+    toast('Удалено', 'success');
+    loadAccounts();
+  }).catch(e => toast(e.error || 'Ошибка', 'error'))
+    .finally(() => { btn.disabled = false; });
 }
 
 function escapeHtml(str) {
