@@ -128,8 +128,9 @@ class MailChecker:
             conn.login(self.imap_user, self.imap_pass)
             conn.select("INBOX", readonly=True)
 
-            # Search for recent unseen emails (last 3 days to catch up)
-            status, data = conn.search(None, "(UNSEEN)")
+            # Search for emails from last 3 days (covers both read and unread)
+            since = time.strftime("%d-%b-%Y", time.gmtime(time.time() - 3 * 86400))
+            status, data = conn.search(None, f'(SINCE {since})')
             if status != "OK" or not data[0]:
                 return 0
 
